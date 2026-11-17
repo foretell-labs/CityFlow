@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import re
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import duckdb
 
@@ -36,7 +36,7 @@ def sql_path(path: Path) -> str:
 def utc_string(epoch: float | None) -> str:
     if epoch is None:
         return ""
-    return datetime.fromtimestamp(float(epoch), tz=timezone.utc).strftime(
+    return datetime.fromtimestamp(float(epoch), tz=UTC).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
 
@@ -253,7 +253,7 @@ def main() -> None:
             for day in range(min(count_by_day), max(count_by_day) + 1):
                 count, nstations = count_by_day.get(day, (0, 0))
                 date = (
-                    datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(days=day)
+                    datetime(1970, 1, 1, tzinfo=UTC) + timedelta(days=day)
                 ).strftime("%Y-%m-%d")
                 daily_rows.append(
                     {

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import duckdb
 
 ROOT = Path(__file__).resolve().parent.parent

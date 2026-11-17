@@ -1,10 +1,9 @@
 """Check hourly dataset quality and evaluate a persistence baseline."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
-
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "heidelberg"
@@ -19,7 +18,7 @@ def percentage(part, total):
 
 
 def utc_date(timestamp):
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(timestamp, tz=UTC).strftime("%Y-%m-%d")
 
 
 # 1. Hourly coverage per station
@@ -176,7 +175,7 @@ print(f"Precision: {precision:.3f}")
 print(f"Recall:    {recall:.3f}")
 print(f"F1 score:  {f1:.3f}")
 
-print(f"\nConfusion matrix:")
+print("\nConfusion matrix:")
 print(f"  True positives:  {tp:,}")
 print(f"  False positives: {fp:,}")
 print(f"  False negatives: {fn:,}")

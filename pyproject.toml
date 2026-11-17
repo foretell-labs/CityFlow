@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Predicting bike-sharing station shortages"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = [                    # what the code needs to RUN
+dependencies = [
     "pandas>=2.2",
     "duckdb>=1.1",
     "scikit-learn>=1.5",
@@ -12,7 +12,7 @@ dependencies = [                    # what the code needs to RUN
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.7.0",
     "pyrefly>=1.4.1",
     "ruff>=0.17.5",
 ]
-

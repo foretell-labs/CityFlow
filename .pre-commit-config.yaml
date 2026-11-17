@@ -1,0 +1,47 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-json # for Jupyter Notebooks
+        types: [file]
+        files: \.(json|ipynb)$
+      - id: check-merge-conflict # leftover <<<<<<< markers
+      - id: detect-private-key # checks for the existence of private keys.
+      - id: check-added-large-files # protects against committing the 2.3 GB dataset
+        args: ["--maxkb=1000"] # max 1MB
+
+  # Fails if pyproject.toml changed but uv.lock wasn't updated (common for beginners)
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.8 # tags match uv versions; `pre-commit autoupdate` bumps it
+    hooks:
+      - id: uv-lock
+
+  # Your own tools, run from local .venv, so the version comes from uv.lock
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+      - id: pyrefly
+        name: pyrefly check
+        entry: uv run pyrefly check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false # a type checker must see the whole project
+        stages: [pre-push] # runs on `git push`, not every commit (see below)
+
+default_install_hook_types: [pre-commit, pre-push]

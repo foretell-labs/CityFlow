@@ -1,7 +1,8 @@
 """Build hourly station states and one-hour shortage targets."""
 
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 import duckdb
 
 
