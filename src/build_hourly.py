@@ -1,4 +1,3 @@
-
 """Build hourly station states and one-hour shortage targets."""
 
 from pathlib import Path
@@ -138,12 +137,11 @@ con.execute("""
 
 for table, filename in [
     ("hourly", "hourly_observations.parquet"),
-    ("ml", "hourly_ml.parquet")
+    ("ml", "hourly_ml.parquet"),
 ]:
     output = folder / filename
     con.execute(
-        f"COPY {table} TO {sql_path(output)} "
-        "(FORMAT PARQUET, COMPRESSION ZSTD)"
+        f"COPY {table} TO {sql_path(output)} (FORMAT PARQUET, COMPRESSION ZSTD)"
     )
     print("Saved:", output)
 
@@ -160,10 +158,7 @@ n_ml, n_shortage, n_stations = con.execute("""
     FROM ml
 """).fetchone()
 
-print(
-    f"Usable hourly states: {n_good:,}/{n_total:,} "
-    f"({n_good / n_total:.1%})"
-)
+print(f"Usable hourly states: {n_good:,}/{n_total:,} ({n_good / n_total:.1%})")
 print(f"One-hour samples: {n_ml:,} across {n_stations} stations")
 
 if n_ml:

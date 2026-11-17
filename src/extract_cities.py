@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import duckdb
 
@@ -31,8 +30,7 @@ def sql_path(path: Path) -> str:
 def export_parquet(con, query: str, path: Path):
     """Save the results of a SQL query as Parquet."""
     con.execute(
-        f"COPY ({query}) TO {sql_path(path)} "
-        "(FORMAT PARQUET, COMPRESSION ZSTD)"
+        f"COPY ({query}) TO {sql_path(path)} (FORMAT PARQUET, COMPRESSION ZSTD)"
     )
 
 
@@ -45,9 +43,7 @@ def main():
 
     for filename in required_files:
         if not (RAW_DIR / filename).exists():
-            raise FileNotFoundError(
-                f"Missing {filename} in {RAW_DIR}"
-            )
+            raise FileNotFoundError(f"Missing {filename} in {RAW_DIR}")
 
     con = duckdb.connect()
 
@@ -71,7 +67,6 @@ def main():
     # --------------------------------------------------
 
     for city_name in CITIES:
-
         # Find city by name
         result = con.execute(
             """

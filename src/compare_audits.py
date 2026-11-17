@@ -1,4 +1,3 @@
-
 """Compare CityFlow station audit outputs (standard library only).
 
 From the CityFlow project root:
@@ -39,10 +38,7 @@ def number(row: dict[str, str], key: str) -> float:
 
 
 def pct(numerator: int, denominator: int) -> str:
-    return (
-        f"{100 * numerator / denominator:.1f}%"
-        if denominator else "N/A"
-    )
+    return f"{100 * numerator / denominator:.1f}%" if denominator else "N/A"
 
 
 def format_date_ranges(days: list[str]) -> str:
@@ -79,60 +75,30 @@ def describe(city: str, root: Path) -> set[str]:
 
     nstations = len(stations)
 
-    nrecords = sum(
-        int(number(row, "status_records"))
-        for row in stations
-    )
+    nrecords = sum(int(number(row, "status_records")) for row in stations)
 
-    active_days = [
-        int(number(row, "days_with_records"))
-        for row in stations
-    ]
+    active_days = [int(number(row, "days_with_records")) for row in stations]
 
-    station_spans = [
-        number(row, "span_days")
-        for row in stations
-    ]
+    station_spans = [number(row, "span_days") for row in stations]
 
-    max_gaps = [
-        number(row, "max_gap_hours")
-        for row in stations
-    ]
+    max_gaps = [number(row, "max_gap_hours") for row in stations]
 
     no_variation = [
-        row for row in stations
-        if number(row, "unique_online_availability") <= 1
+        row for row in stations if number(row, "unique_online_availability") <= 1
     ]
 
-    short_histories = [
-        row for row in stations
-        if number(row, "span_days") < 30
-    ]
+    short_histories = [row for row in stations if number(row, "span_days") < 30]
 
-    few_events = [
-        row for row in stations
-        if number(row, "status_records") < 100
-    ]
+    few_events = [row for row in stations if number(row, "status_records") < 100]
 
-    long_gaps = [
-        row for row in stations
-        if number(row, "max_gap_hours") > 24
-    ]
+    long_gaps = [row for row in stations if number(row, "max_gap_hours") > 24]
 
-    very_long_gaps = [
-        row for row in stations
-        if number(row, "max_gap_hours") > 168
-    ]
+    very_long_gaps = [row for row in stations if number(row, "max_gap_hours") > 168]
 
-    duplicate = [
-        row for row in stations
-        if number(row, "duplicate_timestamps") > 0
-    ]
+    duplicate = [row for row in stations if number(row, "duplicate_timestamps") > 0]
 
     global_zero_days = {
-        row["date_utc"]
-        for row in daily
-        if int(number(row, "status_records")) == 0
+        row["date_utc"] for row in daily if int(number(row, "status_records")) == 0
     }
 
     station_counts_by_day = [
@@ -141,25 +107,13 @@ def describe(city: str, root: Path) -> set[str]:
         if int(number(row, "status_records")) > 0
     ]
 
-    daily_counts = [
-        int(number(row, "status_records"))
-        for row in daily
-    ]
+    daily_counts = [int(number(row, "status_records")) for row in daily]
 
-    offline = sum(
-        int(number(row, "offline_records"))
-        for row in stations
-    )
+    offline = sum(int(number(row, "offline_records")) for row in stations)
 
-    shortages = sum(
-        int(number(row, "shortage_records"))
-        for row in stations
-    )
+    shortages = sum(int(number(row, "shortage_records")) for row in stations)
 
-    valid_online = sum(
-        int(number(row, "valid_online_records"))
-        for row in stations
-    )
+    valid_online = sum(int(number(row, "valid_online_records")) for row in stations)
 
     flags = Counter(
         flag
@@ -189,39 +143,20 @@ def describe(city: str, root: Path) -> set[str]:
         f"{sum(d >= 180 for d in active_days)} / {nstations}"
     )
 
-    print(
-        f"Median first-to-last station span: "
-        f"{median(station_spans):.1f} days"
-    )
+    print(f"Median first-to-last station span: {median(station_spans):.1f} days")
+
+    print(f"Median of each station's longest event gap: {median(max_gaps):.1f} hours")
+
+    print(f"Stations with > 24-hour event gap: {len(long_gaps)} / {nstations}")
+
+    print(f"Stations with > 7-day event gap: {len(very_long_gaps)} / {nstations}")
+
+    print(f"Short histories (<30 days): {len(short_histories)} / {nstations}")
+
+    print(f"Low event counts (<100): {len(few_events)} / {nstations}")
 
     print(
-        f"Median of each station's longest event gap: "
-        f"{median(max_gaps):.1f} hours"
-    )
-
-    print(
-        f"Stations with > 24-hour event gap: "
-        f"{len(long_gaps)} / {nstations}"
-    )
-
-    print(
-        f"Stations with > 7-day event gap: "
-        f"{len(very_long_gaps)} / {nstations}"
-    )
-
-    print(
-        f"Short histories (<30 days): "
-        f"{len(short_histories)} / {nstations}"
-    )
-
-    print(
-        f"Low event counts (<100): "
-        f"{len(few_events)} / {nstations}"
-    )
-
-    print(
-        f"No variation in valid online availability: "
-        f"{len(no_variation)} / {nstations}"
+        f"No variation in valid online availability: {len(no_variation)} / {nstations}"
     )
 
     print(
@@ -229,10 +164,7 @@ def describe(city: str, root: Path) -> set[str]:
         f"{len(duplicate)} / {nstations}"
     )
 
-    print(
-        f"Maintenance events: {offline:,} / {nrecords:,} "
-        f"({pct(offline, nrecords)})"
-    )
+    print(f"Maintenance events: {offline:,} / {nrecords:,} ({pct(offline, nrecords)})")
 
     print(
         f"Shortage events among valid online records: "
@@ -242,19 +174,12 @@ def describe(city: str, root: Path) -> set[str]:
 
     print("\nCity-wide daily activity:")
 
-    print(
-        f"  Days with no recorded event: "
-        f"{len(global_zero_days)} / {len(daily)}"
-    )
+    print(f"  Days with no recorded event: {len(global_zero_days)} / {len(daily)}")
+
+    print(f"  Zero-event UTC dates: {format_date_ranges(sorted(global_zero_days))}")
 
     print(
-        f"  Zero-event UTC dates: "
-        f"{format_date_ranges(sorted(global_zero_days))}"
-    )
-
-    print(
-        f"  Median records per UTC day (including zeros): "
-        f"{median(daily_counts):,.0f}"
+        f"  Median records per UTC day (including zeros): {median(daily_counts):,.0f}"
     )
 
     if station_counts_by_day:
@@ -263,10 +188,7 @@ def describe(city: str, root: Path) -> set[str]:
             f"{median(station_counts_by_day):.0f} / {nstations}"
         )
 
-    print(
-        "  Note: lack of a status change does not prove "
-        "that a station was offline."
-    )
+    print("  Note: lack of a status change does not prove that a station was offline.")
 
     if flags:
         print("\nReview flags (number of stations):")
@@ -278,10 +200,7 @@ def describe(city: str, root: Path) -> set[str]:
 
     least_active = sorted(
         stations,
-        key=lambda r: (
-            number(r, "days_with_records"),
-            number(r, "status_records")
-        )
+        key=lambda r: (number(r, "days_with_records"), number(r, "status_records")),
     )[:5]
 
     for row in least_active:
@@ -299,9 +218,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
-        "cities",
-        nargs="+",
-        help="City report folder names, e.g. bergamo heidelberg"
+        "cities", nargs="+", help="City report folder names, e.g. bergamo heidelberg"
     )
 
     args = parser.parse_args()
@@ -321,10 +238,7 @@ def main() -> None:
         print("SHARED ZERO-EVENT DATES (all selected cities)")
         print("=" * 64)
 
-        print(
-            f"{len(shared)} shared UTC days: "
-            f"{format_date_ranges(sorted(shared))}"
-        )
+        print(f"{len(shared)} shared UTC days: {format_date_ranges(sorted(shared))}")
 
         for city, days in zero_by_city.items():
             unique = days - shared
@@ -334,10 +248,7 @@ def main() -> None:
                 f"{format_date_ranges(sorted(unique))}"
             )
 
-        print(
-            "Matching dates would suggest a shared collection gap, "
-            "not prove one."
-        )
+        print("Matching dates would suggest a shared collection gap, not prove one.")
 
 
 if __name__ == "__main__":

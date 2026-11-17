@@ -1,4 +1,3 @@
-
 """Check hourly dataset quality and evaluate a persistence baseline."""
 
 from datetime import datetime, timezone
@@ -20,9 +19,7 @@ def percentage(part, total):
 
 
 def utc_date(timestamp):
-    return datetime.fromtimestamp(
-        timestamp, tz=timezone.utc
-    ).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
 # 1. Hourly coverage per station
@@ -70,13 +67,9 @@ total, updated, fresh_hour = con.execute("""
 
 print(f"Total one-hour samples: {total:,}")
 print(
-    f"Station state updated between issue and target: "
-    f"{percentage(updated, total):.1f}%"
+    f"Station state updated between issue and target: {percentage(updated, total):.1f}%"
 )
-print(
-    f"Target state at most 60 minutes old: "
-    f"{percentage(fresh_hour, total):.1f}%"
-)
+print(f"Target state at most 60 minutes old: {percentage(fresh_hour, total):.1f}%")
 
 
 # 3. Station shortage distribution
@@ -116,22 +109,31 @@ print(f"Validation ends: {utc_date(val_end)}")
 print(f"Test ends:       {utc_date(end)}")
 
 # Keep samples whose one-hour targets do not cross a split.
-train_n, train_rate = con.execute("""
+train_n, train_rate = con.execute(
+    """
     SELECT COUNT(*), AVG(shortage_in_1h)
     FROM ml
     WHERE target_time <= ?
-""", [train_end]).fetchone()
+""",
+    [train_end],
+).fetchone()
 
-val_n, val_rate = con.execute("""
+val_n, val_rate = con.execute(
+    """
     SELECT COUNT(*), AVG(shortage_in_1h)
     FROM ml
     WHERE issue_time > ? AND target_time <= ?
-""", [train_end, val_end]).fetchone()
+""",
+    [train_end, val_end],
+).fetchone()
 
-test_n = con.execute("""
+test_n = con.execute(
+    """
     SELECT COUNT(*) FROM ml
     WHERE issue_time > ?
-""", [val_end]).fetchone()[0]
+""",
+    [val_end],
+).fetchone()[0]
 
 print(f"Training:   {train_n:,} samples; shortage {train_rate:.1%}")
 print(f"Validation: {val_n:,} samples; shortage {val_rate:.1%}")
@@ -142,7 +144,8 @@ print(f"Test:       {test_n:,} samples (held out)")
 
 print("\n=== PERSISTENCE BASELINE — VALIDATION ===")
 
-tp, fp, fn, tn = con.execute("""
+tp, fp, fn, tn = con.execute(
+    """
     SELECT
         COUNT(*) FILTER (
             WHERE current_bikes <= 2 AND shortage_in_1h = 1
@@ -158,7 +161,9 @@ tp, fp, fn, tn = con.execute("""
         )
     FROM ml
     WHERE issue_time > ? AND target_time <= ?
-""", [train_end, val_end]).fetchone()
+""",
+    [train_end, val_end],
+).fetchone()
 
 precision = tp / (tp + fp) if tp + fp else 0
 recall = tp / (tp + fn) if tp + fn else 0
