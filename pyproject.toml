@@ -19,3 +19,19 @@ dev = [
     "pyrefly>=1.4.1",
     "ruff>=0.17.5",
 ]
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+ignore = []
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+indent-style = "space"
+# Enable reformatting of code snippets in docstrings.
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
