@@ -57,7 +57,8 @@ Run code via:
 ```bash
 uv run python <path-to-pyfile>
 ```
->[!example]
+
+>[!TIP]
 > ```bash
 > uv run python src/build_hourly.py --city heidelberg
 > ```
