@@ -20,10 +20,12 @@ def count_trips_missing_station_ids(city_dir: str | Path) -> int:
             WHERE station_id_start IS NULL OR station_id_end IS NULL
             """,
             [str(city_dir / "trips.parquet")],
-        ).fetchone()[0]
+        ).fetchall()[0][0]
 
 
-def days_with_missing_station_ids(city_dir: str | Path, n: int = 1, *, timezone: str = "UTC") -> tuple[list[date], float | None]:
+def days_with_missing_station_ids(
+    city_dir: str | Path, n: int = 1, *, timezone: str = "UTC"
+) -> tuple[list[date], float | None]:
     """Return the trip start dates with at least n incomplete trips and their ratio.
 
     A trip is incomplete when its start or end station ID is missing.
@@ -51,7 +53,7 @@ def days_with_missing_station_ids(city_dir: str | Path, n: int = 1, *, timezone:
             FROM daily
             """,
             [timezone, str(trips_path), n],
-        ).fetchone()
+        ).fetchall()[0]
 
     dates = dates or []
     ratio = len(dates) / elapsed_days if elapsed_days is not None else None
