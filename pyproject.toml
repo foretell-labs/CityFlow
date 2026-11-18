@@ -35,3 +35,10 @@ indent-style = "space"
 # Enable reformatting of code snippets in docstrings.
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+
+[tool.pyrefly]
+preset = "default"
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
