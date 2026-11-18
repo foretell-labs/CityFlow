@@ -16,16 +16,16 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import re
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import duckdb
 
 # Plausible Unix timestamps, used only to avoid nonsensical date calculations.
 # Records outside these bounds are counted as invalid, not silently discarded.
-TIME_START = 946684800   # 2000-01-01 00:00:00 UTC
-TIME_END = 4102444800    # 2100-01-01 00:00:00 UTC
+TIME_START = 946684800  # 2000-01-01 00:00:00 UTC
+TIME_END = 4102444800  # 2100-01-01 00:00:00 UTC
 
 
 def sql_path(path: Path) -> str:
@@ -36,7 +36,7 @@ def sql_path(path: Path) -> str:
 def utc_string(epoch: float | None) -> str:
     if epoch is None:
         return ""
-    return datetime.fromtimestamp(float(epoch), tz=timezone.utc).strftime(
+    return datetime.fromtimestamp(float(epoch), tz=UTC).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
 
@@ -84,15 +84,22 @@ def main() -> None:
 
         required_stations = {"id", "name"}
         required_status = {
-            "station_id", "time", "bikes", "booked_bikes",
-            "bikes_available_to_rent", "free_racks", "maintenance",
+            "station_id",
+            "time",
+            "bikes",
+            "booked_bikes",
+            "bikes_available_to_rent",
+            "free_racks",
+            "maintenance",
         }
         columns_stations = {r[0] for r in con.execute("DESCRIBE stations").fetchall()}
         columns_status = {r[0] for r in con.execute("DESCRIBE status").fetchall()}
         if missing := required_stations - columns_stations:
             raise ValueError(f"stations.parquet is missing columns: {sorted(missing)}")
         if missing := required_status - columns_status:
-            raise ValueError(f"station_status.parquet is missing columns: {sorted(missing)}")
+            raise ValueError(
+                f"station_status.parquet is missing columns: {sorted(missing)}"
+            )
 
         # Duplicate station IDs are reported below, but deduplicated here to
         # avoid accidentally duplicating status rows during metadata joins.
@@ -106,7 +113,9 @@ def main() -> None:
         meta_rows, unique_stations = con.execute(
             "SELECT COUNT(*), COUNT(DISTINCT id) FROM stations"
         ).fetchone()
-        global_stats = fetch_dicts(con, f"""
+        global_stats = fetch_dicts(
+            con,
+            f"""
             SELECT
                 COUNT(*) AS total_status_records,
                 COUNT(DISTINCT station_id) AS station_ids_in_status,
@@ -126,7 +135,8 @@ def main() -> None:
                 COUNT(*) FILTER (WHERE maintenance = FALSE AND bikes >= 0
                                     AND bikes_available_to_rent BETWEEN 0 AND LEAST(2, bikes)) AS shortage_records
             FROM status
-        """)[0]
+        """,
+        )[0]
         orphan_records = con.execute("""
             SELECT COUNT(*) FROM status AS t
             LEFT JOIN stations_unique AS s ON t.station_id = s.id
@@ -135,7 +145,9 @@ def main() -> None:
 
         # A gap is elapsed time between two RECORDED CHANGES at one station.
         # It is a review signal, not proof that the source feed was down.
-        station_rows = fetch_dicts(con, f"""
+        station_rows = fetch_dicts(
+            con,
+            f"""
             WITH events AS (
                 SELECT
                     station_id,
@@ -195,7 +207,8 @@ def main() -> None:
             LEFT JOIN events AS e ON s.id = e.station_id
             LEFT JOIN gaps AS g ON s.id = g.station_id
             ORDER BY status_records DESC, station_id
-        """)
+        """,
+        )
 
         for row in station_rows:
             row["first_utc"] = utc_string(row.pop("first_epoch"))
@@ -231,33 +244,43 @@ def main() -> None:
             WHERE time BETWEEN {TIME_START} AND {TIME_END}
             GROUP BY 1 ORDER BY 1
         """).fetchall()
-        count_by_day = {int(day): (int(count), int(nstations))
-                        for day, count, nstations in daily_counts}
+        count_by_day = {
+            int(day): (int(count), int(nstations))
+            for day, count, nstations in daily_counts
+        }
         daily_rows = []
         if count_by_day:
             for day in range(min(count_by_day), max(count_by_day) + 1):
                 count, nstations = count_by_day.get(day, (0, 0))
-                date = (datetime(1970, 1, 1, tzinfo=timezone.utc)
-                        + timedelta(days=day)).strftime("%Y-%m-%d")
-                daily_rows.append({
-                    "date_utc": date,
-                    "status_records": count,
-                    "stations_with_records": nstations,
-                })
+                date = (
+                    datetime(1970, 1, 1, tzinfo=UTC) + timedelta(days=day)
+                ).strftime("%Y-%m-%d")
+                daily_rows.append(
+                    {
+                        "date_utc": date,
+                        "status_records": count,
+                        "stations_with_records": nstations,
+                    }
+                )
         daily_report = output / "daily_activity.csv"
-        write_csv(daily_report, daily_rows,
-                  ["date_utc", "status_records", "stations_with_records"])
+        write_csv(
+            daily_report,
+            daily_rows,
+            ["date_utc", "status_records", "stations_with_records"],
+        )
 
         n_observed = sum(r["status_records"] > 0 for r in station_rows)
         n_zero_event_days = sum(r["status_records"] == 0 for r in daily_rows)
         valid_online = global_stats["valid_online_records"]
         shortage_share = (
             100 * global_stats["shortage_records"] / valid_online
-            if valid_online else None
+            if valid_online
+            else None
         )
         offline_share = (
             100 * global_stats["offline_records"] / global_stats["total_status_records"]
-            if global_stats["total_status_records"] else None
+            if global_stats["total_status_records"]
+            else None
         )
 
         def fmt_pct(value: float | None) -> str:
@@ -296,14 +319,17 @@ def main() -> None:
 
         longest = sorted(
             (r for r in station_rows if r["max_gap_hours"] is not None),
-            key=lambda r: r["max_gap_hours"], reverse=True
+            key=lambda r: r["max_gap_hours"],
+            reverse=True,
         )[:5]
         if longest:
             print("\nTop 5 longest gaps between recorded station statuses:")
             for row in longest:
-                print(f"  {row['station_id']}: {row['station_name']} — "
-                      f"{row['max_gap_hours']:.1f} hours; "
-                      f"{row['status_records']:,} records")
+                print(
+                    f"  {row['station_id']}: {row['station_name']} — "
+                    f"{row['max_gap_hours']:.1f} hours; "
+                    f"{row['status_records']:,} records"
+                )
         print(f"\nReports saved in: {output}")
         print("  - station_audit.csv (one row per station)")
         print("  - daily_activity.csv (one row per UTC calendar day)")
