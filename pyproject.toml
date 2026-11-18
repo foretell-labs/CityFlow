@@ -9,11 +9,11 @@ dependencies = [
     "duckdb>=1.1",
     "scikit-learn>=1.5",
     "matplotlib>=3.11.2",
-    "ipython>=9.18.1",
 ]
 
 [dependency-groups]
 dev = [
+    "ipykernel>=7.4.0",
     "pre-commit>=4.7.0",
     "pyrefly>=1.4.1",
     "ruff>=0.17.5",
