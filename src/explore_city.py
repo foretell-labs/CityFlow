@@ -1,5 +1,5 @@
-
 from pathlib import Path
+
 import duckdb
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -8,13 +8,9 @@ DATA = ROOT / "data" / "heidelberg"
 con = duckdb.connect()
 
 # Read the filtered data
-stations = con.read_parquet(
-    str(DATA / "stations.parquet")
-)
+stations = con.read_parquet(str(DATA / "stations.parquet"))
 
-status = con.read_parquet(
-    str(DATA / "station_status.parquet")
-)
+status = con.read_parquet(str(DATA / "station_status.parquet"))
 
 # Number of stations
 print("Stations:", stations.count("*").fetchall()[0][0])

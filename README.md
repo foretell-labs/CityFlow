@@ -19,6 +19,56 @@ Download and extract the dataset into `data/raw/`.
 
 The dataset is licensed under CC BY-NC 4.0.
 
+## Getting started
+After cloning the repo, install `uv` if not already installed (please refer to the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)).
+
+Once installed, install all dependencies via:
+```bash
+uv sync
+```
+which creates `.venv/` with the right Python and the exact versions from `uv.lock`
+
+Then, install the git hooks (for pre-commit) using:
+```bash
+uv run pre-commit install
+```
+which turns on the git hooks, which run formatting and lint checks on every commit.
+
+Furthermore, to have git blame skip the formatting-only commit run:
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+### After setup
+
+Check that setup worked by running:
+```bash
+uv run pre-commit run --all-files
+```
+Every hook should pass.
+
+Add packages via:
+```bash
+uv add <package>
+```
+**DO NOT USE PIP**: packages installed that way aren't recorded in `uv.lock`, and the next `uv sync` removes them.
+
+Run code via:
+```bash
+uv run python <path-to-pyfile>
+```
+
+>[!TIP]
+> ```bash
+> uv run python src/build_hourly.py --city heidelberg
+> ```
+
+After each `git pull` that changes `uv.lock`, run:
+```bash
+uv sync
+```
+
+
 ## Current Progress
 
 - [x] Dataset extraction and city filtering

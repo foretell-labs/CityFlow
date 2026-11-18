@@ -27,8 +27,8 @@ def days_with_missing_station_ids(city_dir: str | Path, n: int = 1, *, timezone:
     """Return the trip start dates with at least n incomplete trips and their ratio.
 
     A trip is incomplete when its start or end station ID is missing.
-    The denominator is the latest trip start date minus the earliest, in days.
-    Return None for the ratio when the date span is zero or unavailable.
+    The denominator counts both the earliest and latest trip start dates.
+    Return None for the ratio when there are no usable trip start dates.
     """
     if n < 1:
         raise ValueError("n must be at least 1")
@@ -47,12 +47,12 @@ def days_with_missing_station_ids(city_dir: str | Path, n: int = 1, *, timezone:
                 GROUP BY trip_date
             )
             SELECT LIST(trip_date ORDER BY trip_date) FILTER (WHERE missing_trips >= ?),
-                   MAX(trip_date) - MIN(trip_date)
+                   MAX(trip_date) - MIN(trip_date) + 1
             FROM daily
             """,
             [timezone, str(trips_path), n],
         ).fetchone()
 
     dates = dates or []
-    ratio = len(dates) / elapsed_days if elapsed_days else None
+    ratio = len(dates) / elapsed_days if elapsed_days is not None else None
     return dates, ratio
