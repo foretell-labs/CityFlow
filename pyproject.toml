@@ -53,3 +53,17 @@ project-includes = [
     "**/*.pyi",
     "**/*.ipynb",
 ]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib", # avoids test-file name clashes
+]
+markers = [
+    "data: needs the real dataset (skipped in CI)",
+    "slow: takes more than a few seconds",
+]
