@@ -59,11 +59,11 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
                    END AS rack_mismatch_ratio,
                    CASE
                        WHEN s.bike_racks = 0 THEN AVG(t.bikes)
-                       WHEN s.bike_racks > 0 THEN 0.0
+                       WHEN s.bike_racks > 0 THEN AVG(t.bikes)
                    END AS mean_bikes,
                    CASE
                        WHEN s.bike_racks = 0 THEN STDDEV_POP(t.bikes)
-                       WHEN s.bike_racks > 0 THEN 0.0
+                       WHEN s.bike_racks > 0 THEN STDDEV_POP(t.bikes)
                    END AS std_bikes
             FROM stations AS s
             LEFT JOIN read_parquet(?) AS t ON t.station_id = s.station_id
