@@ -13,12 +13,22 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ipykernel>=7.4.0",
+lint = [
     "pre-commit>=4.7.0",
     "pyrefly>=1.4.1",
     "ruff>=0.17.5",
 ]
+notebook = [
+    "ipykernel>=7.4.0",
+]
+test = [
+    "hypothesis>=6.170.15",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.uv]
+default-groups = ["lint", "test", "notebook"]
 
 [tool.ruff]
 line-length = 88
