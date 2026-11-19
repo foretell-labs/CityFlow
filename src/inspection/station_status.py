@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import duckdb
+from pandas import DataFrame
 
 
 def station_status_mismatch_ratio(city_dir: str | Path) -> float | None:
@@ -23,3 +24,54 @@ def station_status_mismatch_ratio(city_dir: str | Path) -> float | None:
             """,
             [str(status_path)],
         ).fetchall()[0][0]
+
+
+def station_rack_summary(city_dir: str | Path) -> DataFrame:
+    """Return rack consistency metrics for each station in the city's metadata.
+
+    For positive bike_racks, divide mismatches by all updates for the station.
+    For zero bike_racks, report the mean and population standard deviation
+    of bikes + free_racks, using updates with both counts present.
+    Metrics for the other rack category are zero. Applicable metrics that
+    cannot be calculated, such as at a station with no updates, are null.
+    """
+    city_dir = Path(city_dir)
+    with duckdb.connect() as con:
+        return con.execute(
+            """
+            WITH stations AS (
+                SELECT id AS station_id,
+                       ANY_VALUE(name) AS station_name,
+                       CASE WHEN MIN(bike_racks) = MAX(bike_racks)
+                            THEN MIN(bike_racks) END AS bike_racks
+                FROM read_parquet(?)
+                WHERE id IS NOT NULL
+                GROUP BY id
+            )
+            SELECT s.station_id,
+                   s.station_name,
+                   s.bike_racks,
+                   CASE
+                       WHEN s.bike_racks > 0 THEN COUNT(*) FILTER (
+                           WHERE s.bike_racks - t.bikes - t.free_racks <> 0
+                       ) / NULLIF(COUNT(t.station_id), 0)
+                       WHEN s.bike_racks = 0 THEN 0.0
+                   END AS rack_mismatch_ratio,
+                   CASE
+                       WHEN s.bike_racks = 0 THEN AVG(t.bikes)
+                       WHEN s.bike_racks > 0 THEN 0.0
+                   END AS mean_bikes,
+                   CASE
+                       WHEN s.bike_racks = 0 THEN STDDEV_POP(t.bikes)
+                       WHEN s.bike_racks > 0 THEN 0.0
+                   END AS std_bikes
+            FROM stations AS s
+            LEFT JOIN read_parquet(?) AS t ON t.station_id = s.station_id
+            GROUP BY s.station_id, s.station_name, s.bike_racks
+            ORDER BY s.station_id
+            """,
+            [
+                str(city_dir / "stations.parquet"),
+                str(city_dir / "station_status.parquet"),
+            ],
+        ).df()

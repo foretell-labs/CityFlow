@@ -1,10 +1,14 @@
 import tempfile
 import unittest
+from math import isnan
 from pathlib import Path
 
 import duckdb
 
-from src.inspection.station_status import station_status_mismatch_ratio
+from src.inspection.station_status import (
+    station_rack_summary,
+    station_status_mismatch_ratio,
+)
 
 
 class StationStatusMismatchTests(unittest.TestCase):
@@ -46,3 +50,38 @@ class StationStatusMismatchTests(unittest.TestCase):
         self.write_station_status([])
 
         self.assertIsNone(station_status_mismatch_ratio(self.city_dir))
+
+    def test_rack_summary_uses_capacity_specific_metrics(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT * FROM (VALUES (1, 'North', 10), (1, 'North', 10),
+                    (2, 'South', 0), (3, 'East', 8), (4, 'West', 0))
+                AS stations(id, name, bike_racks)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT * FROM (VALUES
+                    (1, 3, 7), (1, 2, 5), (1, 6, 5), (1, NULL, 6),
+                    (2, 2, 4), (2, 1, 9), (2, 3, NULL), (4, 4, 3))
+                AS status(station_id, bikes, free_racks)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        summary = station_rack_summary(self.city_dir)
+
+        self.assertEqual(
+            list(summary.columns),
+            [
+                "station_id",
+                "station_name",
+                "bike_racks",
+                "rack_mismatch_ratio",
+                "mean_bikes_plus_free_racks",
+                "std_bikes_plus_free_racks",
+            ],
+        )
+        north, south, east, west = summary.itertuples(index=False, name=None)
+        self.assertEqual(north, (1, "North", 10, 0.5, 0.0, 0.0))
+        self.assertEqual(south, (2, "South", 0, 0.0, 8.0, 2.0))
+        self.assertEqual(east[:3], (3, "East", 8))
+        self.assertTrue(isnan(east[3]))
+        self.assertEqual(east[4:], (0.0, 0.0))
+        self.assertEqual(west, (4, "West", 0, 0.0, 7.0, 0.0))
