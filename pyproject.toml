@@ -42,3 +42,5 @@ project-includes = [
     "**/*.py*",
     "**/*.ipynb",
 ]
+# Let Pyrefly resolve imports like src.inspection.trips from the project root.
+search-path = ["."]
