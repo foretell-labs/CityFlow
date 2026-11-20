@@ -5,6 +5,8 @@ from pathlib import Path
 
 import duckdb
 
+import city_flow
+
 
 def sql_path(path):
     return "'" + path.as_posix().replace("'", "''") + "'"
@@ -57,9 +59,10 @@ con.execute(f"""
 
 # 3. Construct a grid of UTC hourly timestamps.
 
-first, last = con.execute(
-    "SELECT MIN(event_time), MAX(event_time) FROM events"
-).fetchone()
+first, last = city_flow.db.fetch_one(
+    con,
+    "SELECT MIN(event_time), MAX(event_time) FROM events",
+)
 
 start = ((first + 3599) // 3600) * 3600
 stop = (last // 3600) * 3600 + 1
@@ -148,16 +151,22 @@ for table, filename in [
 
 # 7. Report the actual usable coverage and label frequency.
 
-n_total, n_good = con.execute("""
+n_total, n_good = city_flow.db.fetch_one(
+    con,
+    """
     SELECT COUNT(*), COUNT(*) FILTER (WHERE usable)
     FROM hourly
-""").fetchone()
+    """,
+)
 
-n_ml, n_shortage, n_stations = con.execute("""
+n_ml, n_shortage, n_stations = city_flow.db.fetch_one(
+    con,
+    """
     SELECT COUNT(*), SUM(shortage_in_1h),
            COUNT(DISTINCT station_id)
     FROM ml
-""").fetchone()
+""",
+)
 
 print(f"Usable hourly states: {n_good:,}/{n_total:,} ({n_good / n_total:.1%})")
 print(f"One-hour samples: {n_ml:,} across {n_stations} stations")
