@@ -5,6 +5,8 @@ from pathlib import Path
 
 import duckdb
 
+import city_flow
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "heidelberg"
 
@@ -46,7 +48,9 @@ for name, total, valid, coverage in results:
 
 print("\n=== LABEL FRESHNESS ===")
 
-total, updated, fresh_hour = con.execute("""
+total, updated, fresh_hour = city_flow.db.fetch_one(
+    con,
+    """
     SELECT
         COUNT(*),
         COUNT(*) FILTER (
@@ -62,7 +66,8 @@ total, updated, fresh_hour = con.execute("""
     JOIN hourly AS target
       ON m.station_id = target.station_id
      AND m.target_time = target.hour_time
-""").fetchone()
+    """,
+)
 
 print(f"Total one-hour samples: {total:,}")
 print(
@@ -95,10 +100,13 @@ for name, n, shortage in results:
 
 print("\n=== CHRONOLOGICAL SPLIT ===")
 
-start, end = con.execute("""
+start, end = city_flow.db.fetch_one(
+    con,
+    """
     SELECT MIN(issue_time), MAX(target_time)
     FROM ml
-""").fetchone()
+""",
+)
 
 train_end = start + int(0.70 * (end - start))
 val_end = start + int(0.85 * (end - start))
@@ -108,31 +116,34 @@ print(f"Validation ends: {utc_date(val_end)}")
 print(f"Test ends:       {utc_date(end)}")
 
 # Keep samples whose one-hour targets do not cross a split.
-train_n, train_rate = con.execute(
+train_n, train_rate = city_flow.db.fetch_one(
+    con,
     """
     SELECT COUNT(*), AVG(shortage_in_1h)
     FROM ml
     WHERE target_time <= ?
 """,
     [train_end],
-).fetchone()
+)
 
-val_n, val_rate = con.execute(
+val_n, val_rate = city_flow.db.fetch_one(
+    con,
     """
     SELECT COUNT(*), AVG(shortage_in_1h)
     FROM ml
     WHERE issue_time > ? AND target_time <= ?
 """,
     [train_end, val_end],
-).fetchone()
+)
 
-test_n = con.execute(
+test_n = city_flow.db.fetch_one(
+    con,
     """
     SELECT COUNT(*) FROM ml
     WHERE issue_time > ?
 """,
     [val_end],
-).fetchone()[0]
+)
 
 print(f"Training:   {train_n:,} samples; shortage {train_rate:.1%}")
 print(f"Validation: {val_n:,} samples; shortage {val_rate:.1%}")
@@ -143,7 +154,8 @@ print(f"Test:       {test_n:,} samples (held out)")
 
 print("\n=== PERSISTENCE BASELINE — VALIDATION ===")
 
-tp, fp, fn, tn = con.execute(
+tp, fp, fn, tn = city_flow.db.fetch_one(
+    con,
     """
     SELECT
         COUNT(*) FILTER (
@@ -162,7 +174,7 @@ tp, fp, fn, tn = con.execute(
     WHERE issue_time > ? AND target_time <= ?
 """,
     [train_end, val_end],
-).fetchone()
+)
 
 precision = tp / (tp + fp) if tp + fp else 0
 recall = tp / (tp + fn) if tp + fn else 0

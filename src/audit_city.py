@@ -22,6 +22,8 @@ from pathlib import Path
 
 import duckdb
 
+import city_flow
+
 # Plausible Unix timestamps, used only to avoid nonsensical date calculations.
 # Records outside these bounds are counted as invalid, not silently discarded.
 TIME_START = 946684800  # 2000-01-01 00:00:00 UTC
@@ -36,9 +38,7 @@ def sql_path(path: Path) -> str:
 def utc_string(epoch: float | None) -> str:
     if epoch is None:
         return ""
-    return datetime.fromtimestamp(float(epoch), tz=UTC).strftime(
-        "%Y-%m-%d %H:%M:%S UTC"
-    )
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
 def write_csv(path: Path, rows: list[dict], columns: list[str] | None = None) -> None:
@@ -110,9 +110,10 @@ def main() -> None:
         """)
 
         # Dataset-level checks, including rows that do not match a known station.
-        meta_rows, unique_stations = con.execute(
-            "SELECT COUNT(*), COUNT(DISTINCT id) FROM stations"
-        ).fetchone()
+        meta_rows, unique_stations = city_flow.db.fetch_one(
+            con,
+            "SELECT COUNT(*), COUNT(DISTINCT id) FROM stations",
+        )
         global_stats = fetch_dicts(
             con,
             f"""
@@ -137,11 +138,14 @@ def main() -> None:
             FROM status
         """,
         )[0]
-        orphan_records = con.execute("""
+        orphan_records = city_flow.db.fetch_one(
+            con,
+            """
             SELECT COUNT(*) FROM status AS t
             LEFT JOIN stations_unique AS s ON t.station_id = s.id
             WHERE s.id IS NULL
-        """).fetchone()[0]
+        """,
+        )[0]
 
         # A gap is elapsed time between two RECORDED CHANGES at one station.
         # It is a review signal, not proof that the source feed was down.
