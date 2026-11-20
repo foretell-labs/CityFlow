@@ -96,7 +96,7 @@ wheels = [
 [[package]]
 name = "city-flow"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 default-groups = ["lint", "notebook", "test"]
 dependencies = [
     { name = "duckdb" },
