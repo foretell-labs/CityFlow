@@ -25,6 +25,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10       # install uv
         with:
           enable-cache: true               # reuse downloaded packages between runs
+          # python-version: ${{ matrix.python-version }} # if strategy matrix is used
       - run: uv sync --locked              # exact lock install; FAILS if lock is stale
       - run: uv run pre-commit run --all-files --show-diff-on-failure
       - run: uv run pyrefly check          # pre-commit skips it here (it's a pre-push hook)
