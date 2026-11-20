@@ -48,6 +48,7 @@ docstring-code-line-length = "dynamic"
 
 [tool.pyrefly]
 preset = "default"
+python-version = "3.14"
 project-includes = [
     "**/*.py",
     "**/*.pyi",
