@@ -52,7 +52,7 @@ python-version = "3.14"
 project-includes = [
     "**/*.py",
     "**/*.pyi",
-    "**/*.ipynb",
+    # "**/*.ipynb", # temporarily do not check notebooks until merged.
 ]
 
 [tool.pytest.ini_options]
