@@ -22,7 +22,7 @@ jobs:
     #     python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7          # copy the repo onto the machine
-      - uses: astral-sh/setup-uv@v10       # install uv
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # install uv
         with:
           enable-cache: true               # reuse downloaded packages between runs
           # python-version: ${{ matrix.python-version }} # if strategy matrix is used
