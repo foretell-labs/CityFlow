@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    branches: [main]      # after every merge
+  pull_request:           # on every PR, before merge
+  workflow_dispatch:      # a manual "Run workflow" button
+
+permissions:
+  contents: read          # least privilege: this job only reads code
+
+concurrency:              # a new push cancels the previous run of the same branch
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:                 # this name becomes the "status check" you require later
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7          # copy the repo onto the machine
+      - uses: astral-sh/setup-uv@v10       # install uv
+        with:
+          enable-cache: true               # reuse downloaded packages between runs
+      - run: uv sync --locked              # exact lock install; FAILS if lock is stale
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
+      - run: uv run pyrefly check          # pre-commit skips it here (it's a pre-push hook)
+      - run: uv run pytest -m "not data"
