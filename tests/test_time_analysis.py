@@ -110,8 +110,8 @@ class HourlyStationStatusTests(unittest.TestCase):
 
         bikes_ax, updates_ax = plot_station_status_by_hour_of_day(self.city_dir)
         self.addCleanup(plt.close, plt.gcf())
-        (bikes_line,) = bikes_ax.get_lines()
-        (updates_line,) = updates_ax.get_lines()
+        bikes_line, bikes_mean_line = bikes_ax.get_lines()
+        updates_line, updates_mean_line = updates_ax.get_lines()
         (bike_band,) = bikes_ax.collections
         (update_band,) = updates_ax.collections
         bikes = np.asarray(bikes_line.get_xydata(), dtype=float)
@@ -124,6 +124,14 @@ class HourlyStationStatusTests(unittest.TestCase):
         self.assertEqual(bikes[2, 1], 0.0)
         self.assertEqual(updates[:4, 1].tolist(), [1 / 3, 0.0, 0.0, 0.0])
 
+        self.assertEqual(bikes_mean_line.get_label(), "Mean")
+        self.assertEqual(updates_mean_line.get_label(), "Mean")
+        bike_means = np.asarray(bikes_mean_line.get_xydata(), dtype=float)
+        update_means = np.asarray(updates_mean_line.get_xydata(), dtype=float)
+        self.assertEqual(bike_means[0, 1], 4.0)
+        self.assertTrue(isnan(bike_means[1, 1]))
+        np.testing.assert_allclose(update_means[:4, 1], [4 / 9, 1 / 9, 1 / 9, 0.0])
+
         bike_vertices = np.asarray(bike_band.get_paths()[0].vertices, dtype=float)
         update_vertices = np.asarray(update_band.get_paths()[0].vertices, dtype=float)
         bike_bounds = bike_vertices[bike_vertices[:, 0] == 0, 1]
@@ -132,3 +140,63 @@ class HourlyStationStatusTests(unittest.TestCase):
         np.testing.assert_allclose(
             [update_bounds.min(), update_bounds.max()], [1 / 3, 0.6]
         )
+
+        narrower_axes = plot_station_status_by_hour_of_day(
+            self.city_dir, confidence=0.5
+        )
+        self.addCleanup(plt.close, plt.gcf())
+        for ax, expected in zip(narrower_axes, ([2.0, 5.5], [1 / 3, 0.5]), strict=True):
+            (band,) = ax.collections
+            vertices = np.asarray(band.get_paths()[0].vertices, dtype=float)
+            bounds = vertices[vertices[:, 0] == 0, 1]
+            np.testing.assert_allclose([bounds.min(), bounds.max()], expected)
+
+    def test_profiles_reject_invalid_confidence(self):
+        for value in (-0.1, 1.1, float("nan")):
+            with (
+                self.subTest(confidence=value),
+                self.assertRaisesRegex(
+                    ValueError, "confidence must be between 0 and 1"
+                ),
+            ):
+                plot_station_status_by_hour_of_day(self.city_dir, confidence=value)
+
+    def test_profiles_filter_stations_by_mean_rentable_bikes(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT 'Example' AS name, 'Europe/Berlin' AS timezone
+            """).write_parquet(str(self.city_dir / "cities.parquet"))
+            con.sql("""
+                SELECT id, 'Station ' || id AS name, 0 AS bike_racks
+                FROM range(1, 5) AS station(id)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT station_id, epoch(observed_at) AS time, bikes_available_to_rent,
+                       bikes_available_to_rent AS bikes, 0 AS free_racks
+                FROM (VALUES
+                    (1, TIMESTAMP '2023-01-01 23:10:00', 5),
+                    (1, TIMESTAMP '2023-01-01 23:20:00', 7),
+                    (3, TIMESTAMP '2023-01-01 23:30:00', 2),
+                    (2, TIMESTAMP '2023-01-02 23:10:00', 20),
+                    (2, TIMESTAMP '2023-01-02 23:20:00', 22),
+                    (2, TIMESTAMP '2023-01-03 23:10:00', 24)
+                ) AS updates(station_id, observed_at, bikes_available_to_rent)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        small_bikes, small_updates = plot_station_status_by_hour_of_day(
+            self.city_dir, station_group="small"
+        )
+        self.addCleanup(plt.close, plt.gcf())
+        big_bikes, big_updates = plot_station_status_by_hour_of_day(
+            self.city_dir, station_group="big"
+        )
+        self.addCleanup(plt.close, plt.gcf())
+
+        self.assertEqual(np.asarray(small_bikes.lines[0].get_xydata())[0, 1], 5)
+        self.assertEqual(np.asarray(big_bikes.lines[0].get_xydata())[0, 1], 22)
+        self.assertEqual(np.asarray(small_updates.lines[0].get_xydata())[0, 1], 0)
+        self.assertEqual(np.asarray(big_updates.lines[0].get_xydata())[0, 1], 1)
+
+        vertices = np.asarray(small_updates.collections[0].get_paths()[0].vertices)
+        upper = vertices[vertices[:, 0] == 0, 1].max()
+        self.assertAlmostEqual(float(upper), 1.2)

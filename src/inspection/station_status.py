@@ -30,10 +30,9 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
     """Return rack consistency metrics for each station in the city's metadata.
 
     For positive bike_racks, divide mismatches by all updates for the station.
-    For zero bike_racks, report the mean and population standard deviation
-    of bikes + free_racks, using updates with both counts present.
-    Metrics for the other rack category are zero. Applicable metrics that
-    cannot be calculated, such as at a station with no updates, are null.
+    Report the mean and population standard deviation of rentable bike counts.
+    The dimension is small at a mean of nine or fewer and big above nine.
+    When the mean is unavailable, dimension is null.
     """
     city_dir = Path(city_dir)
     with duckdb.connect() as con:
@@ -64,7 +63,11 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
                    CASE
                        WHEN s.bike_racks = 0 THEN STDDEV_POP(t.bikes_available_to_rent)
                        WHEN s.bike_racks > 0 THEN STDDEV_POP(t.bikes_available_to_rent)
-                   END AS std_available_bikes
+                   END AS std_available_bikes,
+                   CASE
+                       WHEN mean_available_bikes <= 6 THEN 'small'
+                       WHEN mean_available_bikes > 6 THEN 'big'
+                   END AS dimension
             FROM stations AS s
             LEFT JOIN read_parquet(?) AS t ON t.station_id = s.station_id
             GROUP BY s.station_id, s.station_name, s.bike_racks
