@@ -1,11 +1,17 @@
 import tempfile
 import unittest
+from math import isnan
 from pathlib import Path
 
 import duckdb
+import numpy as np
+from matplotlib import pyplot as plt
 from pandas import Timestamp
 
-from src.inspection.time_analysis import hourly_station_status_changes
+from src.inspection.time_analysis import (
+    hourly_station_status_changes,
+    plot_station_status_by_hour_of_day,
+)
 
 
 class HourlyStationStatusTests(unittest.TestCase):
@@ -82,3 +88,47 @@ class HourlyStationStatusTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "positive integer"),
             ):
                 hourly_station_status_changes(self.city_dir, deltaT=hours)
+
+    def test_profiles_group_local_hours_and_normalize_over_observed_days(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT 'Example' AS name, 'Europe/Berlin' AS timezone
+            """).write_parquet(str(self.city_dir / "cities.parquet"))
+            con.sql("""
+                SELECT station_id, epoch(observed_at) AS time, bikes_available_to_rent
+                FROM (VALUES
+                    (1, TIMESTAMP '2022-12-31 23:10:00', 1),
+                    (1, TIMESTAMP '2022-12-31 23:20:00', 3),
+                    (2, TIMESTAMP '2023-01-01 00:01:00', NULL),
+                    (2, TIMESTAMP '2023-01-02 23:15:00', 8),
+                    (2, TIMESTAMP '2023-01-03 01:00:00', 0),
+                    (2, TIMESTAMP '2023-01-03 23:10:00', NULL),
+                    (99, TIMESTAMP '2023-01-05 00:00:00', 100),
+                    (1, NULL, 100)
+                ) AS updates(station_id, observed_at, bikes_available_to_rent)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        bikes_ax, updates_ax = plot_station_status_by_hour_of_day(self.city_dir)
+        self.addCleanup(plt.close, plt.gcf())
+        (bikes_line,) = bikes_ax.get_lines()
+        (updates_line,) = updates_ax.get_lines()
+        (bike_band,) = bikes_ax.collections
+        (update_band,) = updates_ax.collections
+        bikes = np.asarray(bikes_line.get_xydata(), dtype=float)
+        updates = np.asarray(updates_line.get_xydata(), dtype=float)
+
+        self.assertEqual(bikes[:, 0].tolist(), list(range(24)))
+        self.assertEqual(updates[:, 0].tolist(), list(range(24)))
+        self.assertEqual(bikes[0, 1], 3.0)
+        self.assertTrue(isnan(bikes[1, 1]))
+        self.assertEqual(bikes[2, 1], 0.0)
+        self.assertEqual(updates[:4, 1].tolist(), [1 / 3, 0.0, 0.0, 0.0])
+
+        bike_vertices = np.asarray(bike_band.get_paths()[0].vertices, dtype=float)
+        update_vertices = np.asarray(update_band.get_paths()[0].vertices, dtype=float)
+        bike_bounds = bike_vertices[bike_vertices[:, 0] == 0, 1]
+        update_bounds = update_vertices[update_vertices[:, 0] == 0, 1]
+        np.testing.assert_allclose([bike_bounds.min(), bike_bounds.max()], [1.4, 7])
+        np.testing.assert_allclose(
+            [update_bounds.min(), update_bounds.max()], [1 / 3, 0.6]
+        )

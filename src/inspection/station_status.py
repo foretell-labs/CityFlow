@@ -58,13 +58,13 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
                        WHEN s.bike_racks = 0 THEN 0.0
                    END AS rack_mismatch_ratio,
                    CASE
-                       WHEN s.bike_racks = 0 THEN AVG(t.bikes)
-                       WHEN s.bike_racks > 0 THEN AVG(t.bikes)
-                   END AS mean_bikes,
+                       WHEN s.bike_racks = 0 THEN AVG(t.bikes_available_to_rent)
+                       WHEN s.bike_racks > 0 THEN AVG(t.bikes_available_to_rent)
+                   END AS mean_available_bikes,
                    CASE
-                       WHEN s.bike_racks = 0 THEN STDDEV_POP(t.bikes)
-                       WHEN s.bike_racks > 0 THEN STDDEV_POP(t.bikes)
-                   END AS std_bikes
+                       WHEN s.bike_racks = 0 THEN STDDEV_POP(t.bikes_available_to_rent)
+                       WHEN s.bike_racks > 0 THEN STDDEV_POP(t.bikes_available_to_rent)
+                   END AS std_available_bikes
             FROM stations AS s
             LEFT JOIN read_parquet(?) AS t ON t.station_id = s.station_id
             GROUP BY s.station_id, s.station_name, s.bike_racks
