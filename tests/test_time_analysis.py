@@ -9,7 +9,9 @@ from matplotlib import pyplot as plt
 from pandas import Timestamp
 
 from src.inspection.time_analysis import (
+    hourly_shortage_recoveries,
     hourly_station_status_changes,
+    plot_hourly_shortage_recoveries,
     plot_station_status_by_hour_of_day,
     station_shortage_hours,
 )
@@ -201,6 +203,59 @@ class HourlyStationStatusTests(unittest.TestCase):
         vertices = np.asarray(small_updates.collections[0].get_paths()[0].vertices)
         upper = vertices[vertices[:, 0] == 0, 1].max()
         self.assertAlmostEqual(float(upper), 1.2)
+
+    def test_hourly_shortage_recoveries_count_only_adjacent_usable_updates(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT 'Example' AS name, 'Europe/Berlin' AS timezone
+            """).write_parquet(str(self.city_dir / "cities.parquet"))
+            con.sql("""
+                SELECT id, 'Station ' || id AS name, 0 AS bike_racks
+                FROM (VALUES (1), (1), (2), (3)) AS stations(id)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT station_id, epoch(observed_at) AS time, bikes_available_to_rent,
+                       maintenance, bikes_available_to_rent AS bikes, 0 AS free_racks
+                FROM (VALUES
+                    (1, TIMESTAMP '2023-07-01 22:10:00', 3, FALSE),
+                    (1, TIMESTAMP '2023-07-01 21:40:00', 0, FALSE),
+                    (1, TIMESTAMP '2023-07-01 22:20:00', 4, FALSE),
+                    (1, TIMESTAMP '2023-07-01 22:30:00', 2, FALSE),
+                    (1, TIMESTAMP '2023-07-01 22:40:00', NULL, FALSE),
+                    (1, TIMESTAMP '2023-07-01 22:45:00', 4, FALSE),
+                    (1, TIMESTAMP '2023-07-01 22:50:00', 1, TRUE),
+                    (1, TIMESTAMP '2023-07-01 23:10:00', 4, NULL),
+                    (1, TIMESTAMP '2023-07-01 23:15:00', 5, FALSE),
+                    (1, TIMESTAMP '2023-07-01 23:20:00', 2, FALSE),
+                    (1, TIMESTAMP '2023-07-01 23:30:00', 3, FALSE),
+                    (1, TIMESTAMP '2023-07-02 21:40:00', 2, FALSE),
+                    (1, TIMESTAMP '2023-07-02 22:10:00', 3, FALSE),
+                    (2, TIMESTAMP '2023-07-01 20:00:00', 2, FALSE),
+                    (2, TIMESTAMP '2023-07-01 22:05:00', 15, FALSE),
+                    (2, TIMESTAMP '2023-07-01 22:15:00', 16, FALSE),
+                    (99, TIMESTAMP '2023-07-01 21:00:00', 2, FALSE),
+                    (99, TIMESTAMP '2023-07-01 22:00:00', 3, FALSE)
+                ) AS updates(station_id, observed_at, bikes_available_to_rent, maintenance)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        hourly = hourly_shortage_recoveries(self.city_dir)
+        self.assertEqual(hourly["local_hour"].tolist(), list(range(24)))
+        self.assertEqual(hourly["recoveries"].tolist(), [3, 1] + [0] * 22)
+        self.assertEqual(
+            hourly["recoveries_per_station"].tolist(), [1.0, 1 / 3] + [0.0] * 22
+        )
+
+        small = hourly_shortage_recoveries(self.city_dir, station_group="small")
+        big = hourly_shortage_recoveries(self.city_dir, station_group="big")
+        self.assertEqual(
+            small["recoveries_per_station"].tolist(), [2.0, 1.0] + [0.0] * 22
+        )
+        self.assertEqual(big["recoveries_per_station"].tolist(), [1.0] + [0.0] * 23)
+
+        ax = plot_hourly_shortage_recoveries(self.city_dir, station_group="small")
+        self.addCleanup(plt.close, plt.gcf())
+        (line,) = ax.get_lines()
+        np.testing.assert_array_equal(line.get_ydata(), small["recoveries_per_station"])
 
     def test_station_shortage_hours_use_elapsed_time_between_updates(self):
         with duckdb.connect() as con:

@@ -11,6 +11,41 @@ from pandas import DataFrame
 
 from src.inspection.station_status import station_rack_summary
 
+_STATION_STATUS_HISTORY = """
+    status_updates AS (
+        SELECT * FROM read_parquet(?)
+        UNION ALL BY NAME
+        -- Support older files without a maintenance flag.
+        SELECT NULL::BOOLEAN AS maintenance WHERE FALSE
+    ), station_history AS (
+        SELECT station_id, time, bikes_available_to_rent,
+               LEAD(time) OVER chronological AS next_time,
+               COALESCE(
+                   LAST_VALUE(maintenance IGNORE NULLS) OVER chronological, FALSE
+               ) AS in_maintenance
+        FROM status_updates
+        WHERE isfinite(time) AND station_id IS NOT NULL
+        WINDOW chronological AS (
+            PARTITION BY station_id ORDER BY time
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )
+    )
+"""
+
+
+def _station_ids_for_group(
+    city_dir: Path, station_group: Literal["all", "small", "big"]
+) -> list[int] | None:
+    if station_group == "all":
+        return None
+
+    summary = station_rack_summary(city_dir)
+    selected = summary[summary["dimension"].eq(station_group)]
+    selected_ids = selected["station_id"].tolist()
+    if not selected_ids:
+        raise ValueError(f"No {station_group} stations in {city_dir.name}")
+    return selected_ids
+
 
 def hourly_station_status_changes(city_dir: str | Path, deltaT: int = 1) -> DataFrame:
     """Count recorded updates in deltaT-hour UTC intervals per city station.
@@ -115,15 +150,7 @@ def plot_station_status_by_hour_of_day(
     upper = 0.5 + confidence / 2
     quantiles = [lower, 0.5, upper]
     city_dir = Path(city_dir)
-    selected_ids = None
-    if station_group != "all":
-        summary = station_rack_summary(city_dir)
-        # pyrefly: ignore[missing-attribute]
-        selected_ids = summary.loc[
-            summary["dimension"].eq(station_group), "station_id"
-        ].tolist()
-        if not selected_ids:
-            raise ValueError(f"No {station_group} stations in {city_dir.name}")
+    selected_ids = _station_ids_for_group(city_dir, station_group)
 
     with duckdb.connect() as con:
         city_name, city_timezone = con.execute(
@@ -262,6 +289,95 @@ def plot_station_status_by_hour_of_day(
     return bikes_ax, updates_ax
 
 
+def hourly_shortage_recoveries(
+    city_dir: str | Path, station_group: Literal["all", "small", "big"] = "all"
+) -> DataFrame:
+    """Count recorded recoveries by the local hour of the second update.
+
+    A recovery is a move from at most two rentable bikes to at least three
+    between consecutive updates for the same station. Maintenance and missing
+    or negative counts interrupt the sequence. Counts pool all observed dates.
+    Divide by the number of unique stations in the selected group.
+    """
+    if station_group not in ("all", "small", "big"):
+        raise ValueError("station_group must be 'all', 'small', or 'big'")
+
+    city_dir = Path(city_dir)
+    selected_ids = _station_ids_for_group(city_dir, station_group)
+    with duckdb.connect() as con:
+        (city_timezone,) = con.execute(
+            "SELECT timezone FROM read_parquet(?)",
+            [str(city_dir / "cities.parquet")],
+        ).fetchall()[0]
+
+        return con.execute(
+            f"""
+            WITH {_STATION_STATUS_HISTORY},
+            selected_stations AS (
+                SELECT DISTINCT id
+                FROM read_parquet(?)
+                WHERE id IS NOT NULL
+                  AND COALESCE(list_contains(?::BIGINT[], id), TRUE)
+            ), risk_states AS (
+                SELECT station_id, time,
+                       CASE WHEN NOT in_maintenance AND bikes_available_to_rent >= 0
+                            THEN bikes_available_to_rent <= 2 END AS at_risk
+                FROM station_history
+                JOIN selected_stations ON station_id = id
+            ), transitions AS (
+                SELECT time, at_risk,
+                       LAG(at_risk) OVER (PARTITION BY station_id ORDER BY time)
+                           AS previous_at_risk
+                FROM risk_states
+            ), recoveries_by_hour AS (
+                SELECT hour(timezone(?, to_timestamp(time))) AS local_hour,
+                       COUNT(*) AS recoveries
+                FROM transitions
+                WHERE previous_at_risk AND NOT at_risk
+                GROUP BY local_hour
+            )
+            SELECT hours.local_hour,
+                   COALESCE(r.recoveries, 0) AS recoveries,
+                   COALESCE(r.recoveries, 0) /
+                       NULLIF((SELECT COUNT(*) FROM selected_stations), 0)
+                       AS recoveries_per_station
+            FROM range(24) AS hours(local_hour)
+            LEFT JOIN recoveries_by_hour r USING (local_hour)
+            ORDER BY hours.local_hour
+            """,
+            [
+                str(city_dir / "station_status.parquet"),
+                str(city_dir / "stations.parquet"),
+                selected_ids,
+                city_timezone,
+            ],
+        ).df()
+
+
+def plot_hourly_shortage_recoveries(
+    city_dir: str | Path, station_group: Literal["all", "small", "big"] = "all"
+) -> Axes:
+    """Plot the total recoveries per station in each local hour of the day."""
+    city_dir = Path(city_dir)
+    recoveries = hourly_shortage_recoveries(city_dir, station_group=station_group)
+
+    _, ax = plt.subplots(figsize=(11, 4), layout="constrained")
+    ax.plot(
+        recoveries["local_hour"].to_numpy(),
+        recoveries["recoveries_per_station"].to_numpy(),
+        marker="o",
+    )
+    ax.set(
+        title=f"{city_dir.name.title()} shortage recoveries ({station_group} stations)",
+        xlabel="Local hour of day",
+        ylabel="Recoveries per station",
+        xticks=range(24),
+        ylim=(0, None),
+    )
+    ax.grid(axis="y", alpha=0.25)
+    return ax
+
+
 def station_shortage_hours(city_dir: str | Path) -> DataFrame:
     """Add active_hours and shortage_hours to the city's station rack summary.
 
@@ -277,26 +393,8 @@ def station_shortage_hours(city_dir: str | Path) -> DataFrame:
     summary = station_rack_summary(city_dir)
     with duckdb.connect() as con:
         hours = con.execute(
-            """
-            WITH status_updates AS (
-                SELECT * FROM read_parquet(?)
-                UNION ALL BY NAME
-                -- Supply a nullable flag for older files without this column.
-                SELECT NULL::BOOLEAN AS maintenance WHERE FALSE
-            ), intervals AS (
-                SELECT station_id, time, bikes_available_to_rent,
-                       LEAD(time) OVER station_history AS next_time,
-                       COALESCE(
-                           LAST_VALUE(maintenance IGNORE NULLS) OVER station_history,
-                           FALSE
-                       ) AS in_maintenance
-                FROM status_updates
-                WHERE isfinite(time) AND station_id IS NOT NULL
-                WINDOW station_history AS (
-                    PARTITION BY station_id ORDER BY time
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                )
-            )
+            f"""
+            WITH {_STATION_STATUS_HISTORY}
             SELECT station_id,
                    COALESCE(SUM(next_time - time) FILTER (
                        WHERE NOT in_maintenance
@@ -304,7 +402,7 @@ def station_shortage_hours(city_dir: str | Path) -> DataFrame:
                    COALESCE(SUM(next_time - time) FILTER (
                        WHERE NOT in_maintenance AND bikes_available_to_rent < 3
                    ), 0) / 3600 AS shortage_hours
-            FROM intervals
+            FROM station_history
             GROUP BY station_id
             """,
             [str(city_dir / "station_status.parquet")],
