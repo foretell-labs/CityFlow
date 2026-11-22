@@ -3,6 +3,8 @@ name = "city-flow"
 version = "0.1.0"
 description = "Predicting bike-sharing station shortages"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 dependencies = [
     "pandas[output-formatting,plot]>=2.2",
@@ -13,12 +15,26 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ipykernel>=7.4.0",
+lint = [
     "pre-commit>=4.7.0",
     "pyrefly>=1.4.1",
     "ruff>=0.17.5",
 ]
+notebook = [
+    "ipykernel>=7.4.0",
+]
+test = [
+    "hypothesis>=6.170.15",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["lint", "test", "notebook"]
 
 [tool.ruff]
 line-length = 88
@@ -38,9 +54,25 @@ docstring-code-line-length = "dynamic"
 
 [tool.pyrefly]
 preset = "default"
+python-version = "3.14"
 project-includes = [
-    "**/*.py*",
-    "**/*.ipynb",
+    "**/*.py",
+    "**/*.pyi",
+    # "**/*.ipynb", # temporarily do not check notebooks until merged.
+]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib", # avoids test-file name clashes
+]
+markers = [
+    "data: needs the real dataset (skipped in CI)",
+    "slow: takes more than a few seconds",
 ]
 # Let Pyrefly resolve imports like src.inspection.trips from the project root.
 search-path = ["."]

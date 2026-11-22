@@ -5,6 +5,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
@@ -18,7 +19,7 @@ repos:
 
   # Fails if pyproject.toml changed but uv.lock wasn't updated (common for beginners)
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.8 # tags match uv versions; `pre-commit autoupdate` bumps it
+    rev: 0.13.9 # tags match uv versions; `pre-commit autoupdate` bumps it
     hooks:
       - id: uv-lock
 
