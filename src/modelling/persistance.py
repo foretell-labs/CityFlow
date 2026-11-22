@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from pandas import DataFrame
+from sklearn.metrics import confusion_matrix
 
 _AT_RISK_SQL = "CAST(bikes_available_to_rent <= 2 AS INTEGER)"
 
@@ -111,13 +112,12 @@ def evaluation_metrics(
     if not scored.isin([0, 1]).to_numpy().all():
         raise ValueError("Both risk columns must contain only 0, 1, or missing values")
 
-    actual_shortage = scored["actual_at_risk"].to_numpy(dtype=bool)
-    predicted_shortage = scored["predicted_at_risk"].to_numpy(dtype=bool)
-    tn = int(np.count_nonzero(~actual_shortage & ~predicted_shortage))
-    fp = int(np.count_nonzero(~actual_shortage & predicted_shortage))
-    fn = int(np.count_nonzero(actual_shortage & ~predicted_shortage))
-    tp = int(np.count_nonzero(actual_shortage & predicted_shortage))
-    counts = np.array([[tn, fp], [fn, tp]])
+    counts = confusion_matrix(
+        scored["actual_at_risk"].to_numpy(dtype=int),
+        scored["predicted_at_risk"].to_numpy(dtype=int),
+        labels=[0, 1],
+    )
+    tn, fp, fn, tp = map(int, counts.ravel())
     undefined = float("nan")
     metrics = {
         "tn": tn,
