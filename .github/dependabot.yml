@@ -28,3 +28,5 @@ updates:
     groups:
       pre-commit-hooks:
         patterns: ["*"] # one PR for all hook bumps
+    cooldown:
+      default-days: 5
