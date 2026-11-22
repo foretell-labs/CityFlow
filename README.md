@@ -79,3 +79,7 @@ uv sync
 - [ ] Feature engineering and ML model training
 - [ ] Model evaluation and comparison
 - [ ] Interactive dashboard
+
+## License
+Code: [**MIT**](LICENSE).
+Dataset: **CC BY-NC 4.0** (see the original dataset).
