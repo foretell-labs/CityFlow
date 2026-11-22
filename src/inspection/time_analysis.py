@@ -260,3 +260,36 @@ def plot_station_status_by_hour_of_day(
         f"({lower:.1%} to {upper:.1%} percentile band)"
     )
     return bikes_ax, updates_ax
+
+
+def station_shortage_hours(city_dir: str | Path) -> DataFrame:
+    """Add active_hours and shortage_hours to the city's station rack summary.
+
+    Active hours are the span from the first to the last valid timestamp.
+    Shortage hours sum the intervals starting with fewer than three rentable
+    bikes. Each count applies until the next update. Intervals with missing
+    counts contribute no shortage time, and the last update ends the span.
+    Stations without usable timestamps have missing values for both metrics.
+    """
+    city_dir = Path(city_dir)
+    summary = station_rack_summary(city_dir)
+    with duckdb.connect() as con:
+        hours = con.execute(
+            """
+            WITH intervals AS (
+                SELECT station_id, time, bikes_available_to_rent,
+                       LEAD(time) OVER (PARTITION BY station_id ORDER BY time) AS next_time
+                FROM read_parquet(?)
+                WHERE isfinite(time) AND station_id IS NOT NULL
+            )
+            SELECT station_id,
+                   (MAX(time) - MIN(time)) / 3600 AS active_hours,
+                   COALESCE(SUM(next_time - time) FILTER (
+                       WHERE bikes_available_to_rent < 3
+                   ), 0) / 3600 AS shortage_hours
+            FROM intervals
+            GROUP BY station_id
+            """,
+            [str(city_dir / "station_status.parquet")],
+        ).df()
+    return summary.merge(hours, on="station_id", how="left")

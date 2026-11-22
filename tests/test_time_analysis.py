@@ -11,6 +11,7 @@ from pandas import Timestamp
 from src.inspection.time_analysis import (
     hourly_station_status_changes,
     plot_station_status_by_hour_of_day,
+    station_shortage_hours,
 )
 
 
@@ -200,3 +201,29 @@ class HourlyStationStatusTests(unittest.TestCase):
         vertices = np.asarray(small_updates.collections[0].get_paths()[0].vertices)
         upper = vertices[vertices[:, 0] == 0, 1].max()
         self.assertAlmostEqual(float(upper), 1.2)
+
+    def test_station_shortage_hours_use_elapsed_time_between_updates(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT id, 'Station ' || id AS name, 0 AS bike_racks
+                FROM range(1, 4) AS station(id)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT station_id, time, bikes_available_to_rent,
+                       bikes_available_to_rent AS bikes, 0 AS free_racks
+                FROM (VALUES
+                    (1, 12600, 1), (1, 9000, 0), (1, 0, 4), (1, 1800, 2),
+                    (1, 7200, NULL), (1, 10800, 3), (1, NULL, 1), (2, 6000, 2)
+                ) AS status(station_id, time, bikes_available_to_rent)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        summary = station_shortage_hours(self.city_dir)
+
+        self.assertEqual(
+            summary.columns[-2:].tolist(), ["active_hours", "shortage_hours"]
+        )
+        self.assertEqual(summary["station_id"].tolist(), [1, 2, 3])
+        for name, expected in (("active_hours", 3.5), ("shortage_hours", 2.0)):
+            values = summary[name].tolist()
+            self.assertEqual(values[:2], [expected, 0.0])
+            self.assertTrue(isnan(values[2]))
