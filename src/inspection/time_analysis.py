@@ -53,15 +53,22 @@ _STATION_RISK_STATES = """
 """
 
 
+_STATION_GROUP_COLORS = (("small", "tab:blue"), ("big", "tab:orange"))
+
+
+def _station_ids_with_dimension(stations: DataFrame, dimension: str) -> list[int]:
+    return stations[stations["dimension"].eq(dimension)]["station_id"].tolist()
+
+
 def _station_ids_for_group(
     city_dir: Path, station_group: Literal["all", "small", "big"]
 ) -> list[int] | None:
     if station_group == "all":
         return None
 
-    summary = station_rack_summary(city_dir)
-    selected = summary[summary["dimension"].eq(station_group)]
-    selected_ids = selected["station_id"].tolist()
+    selected_ids = _station_ids_with_dimension(
+        station_rack_summary(city_dir), station_group
+    )
     if not selected_ids:
         raise ValueError(f"No {station_group} stations in {city_dir.name}")
     return selected_ids
@@ -324,6 +331,12 @@ def hourly_shortage_recoveries(
 
     city_dir = Path(city_dir)
     selected_ids = _station_ids_for_group(city_dir, station_group)
+    return _hourly_shortage_recoveries(city_dir, selected_ids)
+
+
+def _hourly_shortage_recoveries(
+    city_dir: Path, selected_ids: list[int] | None
+) -> DataFrame:
     with duckdb.connect() as con:
         (city_timezone,) = con.execute(
             "SELECT timezone FROM read_parquet(?)",
@@ -363,27 +376,34 @@ def hourly_shortage_recoveries(
         ).df()
 
 
-def plot_hourly_shortage_recoveries(
-    city_dir: str | Path, station_group: Literal["all", "small", "big"] = "all"
-) -> Axes:
-    """Plot the total recoveries per station in each local hour of the day."""
+def plot_hourly_shortage_recoveries(city_dir: str | Path) -> Axes:
+    """Compare hourly recoveries per station for small and big stations."""
     city_dir = Path(city_dir)
-    recoveries = hourly_shortage_recoveries(city_dir, station_group=station_group)
+    stations = station_rack_summary(city_dir)
 
     _, ax = plt.subplots(figsize=(11, 4), layout="constrained")
-    ax.plot(
-        recoveries["local_hour"].to_numpy(),
-        recoveries["recoveries_per_station"].to_numpy(),
-        marker="o",
-    )
+    for group, color in _STATION_GROUP_COLORS:
+        selected_ids = _station_ids_with_dimension(stations, group)
+        recoveries = _hourly_shortage_recoveries(city_dir, selected_ids)
+        label = f"{group.title()} stations"
+        if not selected_ids:
+            label += " (none)"
+        ax.plot(
+            recoveries["local_hour"].to_numpy(),
+            recoveries["recoveries_per_station"].to_numpy(),
+            marker="o",
+            color=color,
+            label=label,
+        )
     ax.set(
-        title=f"{city_dir.name.title()} shortage recoveries ({station_group} stations)",
+        title=f"{city_dir.name.title()} shortage recoveries",
         xlabel="Local hour of day",
         ylabel="Recoveries per station",
         xticks=range(24),
         ylim=(0, None),
     )
     ax.grid(axis="y", alpha=0.25)
+    ax.legend()
     return ax
 
 
@@ -459,15 +479,13 @@ def shortage_durations(
 
 def plot_shortage_duration_distribution(
     city_dir: str | Path,
-    station_group: Literal["all", "small", "big"] = "all",
     *,
     collection_gaps: Sequence[tuple[float, float]] = (),
 ) -> Axes:
-    """Plot the share of complete shortage episodes in each duration bin."""
+    """Compare duration-bin shares, normalized within each station group."""
     city_dir = Path(city_dir)
-    episodes = shortage_durations(
-        city_dir, station_group=station_group, collection_gaps=collection_gaps
-    )
+    episodes = shortage_durations(city_dir, collection_gaps=collection_gaps)
+    stations = station_rack_summary(city_dir)
     bin_edges = [0, 0.25, 0.5, 1, 2, 4, 8, 24, np.inf]
     bin_labels = [
         "<15 min",
@@ -479,29 +497,40 @@ def plot_shortage_duration_distribution(
         "8-24 h",
         "24+ h",
     ]
-    counts, _ = np.histogram(episodes["duration_hours"].to_numpy(), bins=bin_edges)
+    bin_positions = np.arange(len(bin_labels))
+    bar_width = 0.38
 
     _, ax = plt.subplots(figsize=(10, 4), layout="constrained")
-    if episodes.empty:
-        ax.text(
-            0.5,
-            0.5,
-            "No complete shortage episodes",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
+    for index, (group, color) in enumerate(_STATION_GROUP_COLORS):
+        selected_ids = _station_ids_with_dimension(stations, group)
+        durations = episodes[episodes["station_id"].isin(selected_ids)][
+            "duration_hours"
+        ]
+        label = f"{group.title()} stations"
+        if durations.empty:
+            label += " (no episodes)"
+            shares = np.full(len(bin_labels), np.nan)
+        else:
+            counts, _ = np.histogram(durations.to_numpy(), bins=bin_edges)
+            shares = counts / len(durations)
+        ax.bar(
+            bin_positions + (index - 0.5) * bar_width,
+            shares,
+            width=bar_width,
+            label=label,
+            color=color,
         )
-    else:
-        ax.bar(bin_labels, counts / len(episodes))
     ax.set(
-        title=f"{city_dir.name.title()} shortage durations ({station_group} stations)",
+        title=f"{city_dir.name.title()} shortage durations",
         xlabel="Shortage duration",
         ylabel="Share of shortage episodes",
         ylim=(0, None),
     )
+    ax.set_xticks(bin_positions, bin_labels)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1))
     ax.grid(axis="y", alpha=0.25)
     ax.set_axisbelow(True)
+    ax.legend()
     return ax
 
 

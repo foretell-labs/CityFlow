@@ -255,10 +255,18 @@ class HourlyStationStatusTests(unittest.TestCase):
         )
         self.assertEqual(big["recoveries_per_station"].tolist(), [1.0] + [0.0] * 23)
 
-        ax = plot_hourly_shortage_recoveries(self.city_dir, station_group="small")
+        ax = plot_hourly_shortage_recoveries(self.city_dir)
         self.addCleanup(plt.close, plt.gcf())
-        (line,) = ax.get_lines()
-        np.testing.assert_array_equal(line.get_ydata(), small["recoveries_per_station"])
+        small_line, big_line = ax.get_lines()
+        self.assertEqual(small_line.get_label(), "Small stations")
+        self.assertEqual(big_line.get_label(), "Big stations")
+        self.assertNotEqual(small_line.get_color(), big_line.get_color())
+        np.testing.assert_array_equal(
+            small_line.get_ydata(), small["recoveries_per_station"]
+        )
+        np.testing.assert_array_equal(
+            big_line.get_ydata(), big["recoveries_per_station"]
+        )
 
     def test_shortage_durations_require_a_recorded_start_and_recovery(self):
         with duckdb.connect() as con:
@@ -305,11 +313,21 @@ class HourlyStationStatusTests(unittest.TestCase):
 
         ax = plot_shortage_duration_distribution(self.city_dir)
         self.addCleanup(plt.close, plt.gcf())
-        (bars,) = ax.containers
-        assert isinstance(bars, BarContainer)
+        small_bars, big_bars = ax.containers
+        assert isinstance(small_bars, BarContainer)
+        assert isinstance(big_bars, BarContainer)
+        self.assertEqual(small_bars.get_label(), "Small stations")
+        self.assertEqual(big_bars.get_label(), "Big stations")
+        self.assertNotEqual(
+            small_bars.patches[0].get_facecolor(), big_bars.patches[0].get_facecolor()
+        )
         np.testing.assert_allclose(
-            [bar.get_height() for bar in bars.patches],
-            [0, 1 / 3, 0, 2 / 3, 0, 0, 0, 0],
+            [bar.get_height() for bar in small_bars.patches],
+            [0, 0, 0, 1, 0, 0, 0, 0],
+        )
+        np.testing.assert_allclose(
+            [bar.get_height() for bar in big_bars.patches],
+            [0, 1, 0, 0, 0, 0, 0, 0],
         )
 
     def test_station_shortage_hours_use_elapsed_time_between_updates(self):
