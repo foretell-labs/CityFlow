@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Update uv.lock
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      python-dependencies:
+        patterns: ["*"] # one PR for everything, not one per package
+    cooldown:
+      default-days: 5
+      semver-major-days: 30 # Major updates
+      semver-minor-days: 7 # Minor updates
+      semver-patch-days: 3 # Patch updates
+  # Update uses: in ci.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 5
+  # Update rev: in pre-commit-config.yml
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"] # one PR for all hook bumps
+    cooldown:
+      default-days: 5

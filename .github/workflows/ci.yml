@@ -1,0 +1,33 @@
+name: CI
+on:
+  push:
+    branches: [main]      # after every merge
+  pull_request:           # on every PR, before merge
+  workflow_dispatch:      # a manual "Run workflow" button
+
+permissions:
+  contents: read          # least privilege: this job only reads code
+
+concurrency:              # a new push cancels the previous run of the same branch
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:                 # this name becomes the "status check" you require later
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Config if multiple python versions are supported
+    # strategy:
+    #   matrix:
+    #     python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7          # copy the repo onto the machine
+      # install uv # v10.4.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
+        with:
+          enable-cache: true               # reuse downloaded packages between runs
+          # python-version: ${{ matrix.python-version }} # if strategy matrix is used
+      - run: uv sync --locked              # exact lock install; FAILS if lock is stale
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
+      - run: uv run pyrefly check          # pre-commit skips it here (it's a pre-push hook)
+      - run: uv run pytest -m "not data"

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import duckdb
 
+import city_flow
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "heidelberg"
 
@@ -16,7 +18,10 @@ con = duckdb.connect()
 con.read_parquet(str(DATA / "hourly_ml.parquet")).create_view("ml")
 con.read_parquet(str(DATA / "hourly_observations.parquet")).create_view("hourly")
 
-start, end = con.execute("SELECT MIN(issue_time), MAX(target_time) FROM ml").fetchone()
+start, end = city_flow.db.fetch_one(
+    con,
+    "SELECT MIN(issue_time), MAX(target_time) FROM ml",
+)
 
 train_end = start + int(0.70 * (end - start))
 val_end = start + int(0.85 * (end - start))

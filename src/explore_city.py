@@ -2,6 +2,8 @@ from pathlib import Path
 
 import duckdb
 
+import city_flow
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "heidelberg"
 
@@ -23,7 +25,8 @@ print("\nStation information:")
 print(stations.limit(5).df().to_string(index=False))
 
 # Find the period covered by the dataset
-time_range = con.execute(
+time_range = city_flow.db.fetch_one(
+    con,
     """
     SELECT
         MIN(to_timestamp(time)) AS first_observation,
@@ -31,7 +34,7 @@ time_range = con.execute(
     FROM read_parquet(?)
     """,
     [str(DATA / "station_status.parquet")],
-).fetchone()
+)
 
 print("\nAvailable history:")
 print("First observation:", time_range[0])
