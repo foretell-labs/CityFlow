@@ -265,27 +265,44 @@ def plot_station_status_by_hour_of_day(
 def station_shortage_hours(city_dir: str | Path) -> DataFrame:
     """Add active_hours and shortage_hours to the city's station rack summary.
 
-    Active hours are the span from the first to the last valid timestamp.
-    Shortage hours sum the intervals starting with fewer than three rentable
-    bikes. Each count applies until the next update. Intervals with missing
-    counts contribute no shortage time, and the last update ends the span.
-    Stations without usable timestamps have missing values for both metrics.
+    Active hours sum the time between updates outside maintenance. Shortage
+    hours sum the active intervals that start with fewer than three rentable
+    bikes. A maintenance flag applies until the next explicit flag for that
+    station. If no flag has been reported, treat the station as active.
+    Intervals with missing bike counts contribute no shortage time, and the
+    last update ends the span. Stations without usable timestamps have missing
+    values for both metrics.
     """
     city_dir = Path(city_dir)
     summary = station_rack_summary(city_dir)
     with duckdb.connect() as con:
         hours = con.execute(
             """
-            WITH intervals AS (
+            WITH status_updates AS (
+                SELECT * FROM read_parquet(?)
+                UNION ALL BY NAME
+                -- Supply a nullable flag for older files without this column.
+                SELECT NULL::BOOLEAN AS maintenance WHERE FALSE
+            ), intervals AS (
                 SELECT station_id, time, bikes_available_to_rent,
-                       LEAD(time) OVER (PARTITION BY station_id ORDER BY time) AS next_time
-                FROM read_parquet(?)
+                       LEAD(time) OVER station_history AS next_time,
+                       COALESCE(
+                           LAST_VALUE(maintenance IGNORE NULLS) OVER station_history,
+                           FALSE
+                       ) AS in_maintenance
+                FROM status_updates
                 WHERE isfinite(time) AND station_id IS NOT NULL
+                WINDOW station_history AS (
+                    PARTITION BY station_id ORDER BY time
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                )
             )
             SELECT station_id,
-                   (MAX(time) - MIN(time)) / 3600 AS active_hours,
                    COALESCE(SUM(next_time - time) FILTER (
-                       WHERE bikes_available_to_rent < 3
+                       WHERE NOT in_maintenance
+                   ), 0) / 3600 AS active_hours,
+                   COALESCE(SUM(next_time - time) FILTER (
+                       WHERE NOT in_maintenance AND bikes_available_to_rent < 3
                    ), 0) / 3600 AS shortage_hours
             FROM intervals
             GROUP BY station_id

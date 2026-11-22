@@ -227,3 +227,31 @@ class HourlyStationStatusTests(unittest.TestCase):
             values = summary[name].tolist()
             self.assertEqual(values[:2], [expected, 0.0])
             self.assertTrue(isnan(values[2]))
+
+    def test_station_shortage_hours_pause_until_maintenance_ends(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT id, 'Station ' || id AS name, 0 AS bike_racks
+                FROM range(1, 3) AS station(id)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT station_id, time, bikes_available_to_rent, maintenance,
+                       bikes_available_to_rent AS bikes, 0 AS free_racks
+                FROM (VALUES
+                    (1,     0, 2, FALSE),
+                    (1,  3600, 0, TRUE),
+                    (1,  7200, 2, NULL),
+                    (1, 10800, 4, TRUE),
+                    (1, 14400, 2, FALSE),
+                    (1, 16200, 3, NULL),
+                    (1, 18000, 0, TRUE),
+                    (1, 21600, 0, TRUE),
+                    (2,     0, 0, TRUE),
+                    (2,  3600, 0, TRUE)
+                ) AS status(station_id, time, bikes_available_to_rent, maintenance)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        summary = station_shortage_hours(self.city_dir)
+
+        self.assertEqual(summary["active_hours"].tolist(), [2.0, 0.0])
+        self.assertEqual(summary["shortage_hours"].tolist(), [1.5, 0.0])

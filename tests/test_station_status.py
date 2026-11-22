@@ -85,7 +85,7 @@ class StationStatusMismatchTests(unittest.TestCase):
         self.assertEqual(north[:5], (1, "North", 10, 0.5, 3.0))
         self.assertAlmostEqual(north[5], sqrt(8 / 3))
         self.assertEqual(north[6], "small")
-        self.assertEqual(south, (2, "South", 0, 0.0, 9.0, 1.0, "small"))
+        self.assertEqual(south, (2, "South", 0, 0.0, 6.0, 1.0, "small"))
         self.assertEqual(east[:3], (3, "East", 8))
         self.assertTrue(all(isnan(value) for value in east[3:6]))
         self.assertTrue(isna(east[6]))
