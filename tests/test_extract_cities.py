@@ -55,7 +55,9 @@ class ExtractCitiesTests(unittest.TestCase):
             return connection.read_parquet(str(path)).order("1, 2").fetchall()
 
     def test_project_root_resolves_from_new_script_location(self):
-        self.assertEqual(extract_cities.PROJECT_ROOT, Path(__file__).resolve().parents[1])
+        self.assertEqual(
+            extract_cities.PROJECT_ROOT, Path(__file__).resolve().parents[1]
+        )
 
     def test_extracts_only_rows_belonging_to_each_requested_city(self):
         self.run_extraction()
@@ -71,13 +73,19 @@ class ExtractCitiesTests(unittest.TestCase):
         )
         self.assertEqual(self.read_rows("bergamo", "trips.parquet"), [(100, 1, 10, 11)])
 
-        self.assertEqual(self.read_rows("heidelberg", "cities.parquet"), [(2, "Heidelberg")])
-        self.assertEqual(self.read_rows("heidelberg", "stations.parquet"), [(20, 2, "Center")])
+        self.assertEqual(
+            self.read_rows("heidelberg", "cities.parquet"), [(2, "Heidelberg")]
+        )
+        self.assertEqual(
+            self.read_rows("heidelberg", "stations.parquet"), [(20, 2, "Center")]
+        )
         self.assertEqual(
             self.read_rows("heidelberg", "station_status.parquet"),
             [(20, 1735689600, 1)],
         )
-        self.assertEqual(self.read_rows("heidelberg", "trips.parquet"), [(200, 2, 20, 20)])
+        self.assertEqual(
+            self.read_rows("heidelberg", "trips.parquet"), [(200, 2, 20, 20)]
+        )
         self.assertFalse((self.output_dir / "other_city").exists())
 
     def test_skips_unknown_city_and_matches_names_case_insensitively(self):
@@ -91,17 +99,26 @@ class ExtractCitiesTests(unittest.TestCase):
 
         self.run_extraction(cities=("Bergamo",), include_trips=False)
 
-        self.assertTrue((self.output_dir / "bergamo" / "station_status.parquet").is_file())
+        self.assertTrue(
+            (self.output_dir / "bergamo" / "station_status.parquet").is_file()
+        )
         self.assertFalse((self.output_dir / "bergamo" / "trips.parquet").exists())
 
     def test_missing_required_csv_fails_before_creating_city_output(self):
-        for filename in ("cities.csv", "stations.csv", "station_status.csv", "trips.csv"):
+        for filename in (
+            "cities.csv",
+            "stations.csv",
+            "station_status.csv",
+            "trips.csv",
+        ):
             with self.subTest(filename=filename):
                 csv_path = self.raw_dir / filename
                 original = csv_path.read_bytes()
                 csv_path.unlink()
                 try:
-                    with self.assertRaisesRegex(FileNotFoundError, f"Missing {filename}"):
+                    with self.assertRaisesRegex(
+                        FileNotFoundError, f"Missing {filename}"
+                    ):
                         self.run_extraction()
                     self.assertEqual(list(self.output_dir.iterdir()), [self.raw_dir])
                 finally:

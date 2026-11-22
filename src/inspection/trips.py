@@ -72,7 +72,8 @@ def days_with_missing_station_ids(
 
 
 def plot_daily_missing_station_id_share(
-    data_dir: str | Path, cities: Sequence[str] = ("bergamo", "heidelberg", "karlsruhe"),
+    data_dir: str | Path,
+    cities: Sequence[str] = ("bergamo", "heidelberg", "karlsruhe"),
 ) -> Axes:
     """Plot the daily share of trips missing either station ID for each city.
 
