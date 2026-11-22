@@ -60,6 +60,8 @@ project-includes = [
     "**/*.pyi",
     # "**/*.ipynb", # temporarily do not check notebooks until merged.
 ]
+# Let Pyrefly resolve imports like src.inspection.trips from the project root.
+search-path = ["."]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
@@ -74,5 +76,3 @@ markers = [
     "data: needs the real dataset (skipped in CI)",
     "slow: takes more than a few seconds",
 ]
-# Let Pyrefly resolve imports like src.inspection.trips from the project root.
-search-path = ["."]
