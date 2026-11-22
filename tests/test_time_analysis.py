@@ -6,13 +6,16 @@ from pathlib import Path
 import duckdb
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.container import BarContainer
 from pandas import Timestamp
 
 from src.inspection.time_analysis import (
     hourly_shortage_recoveries,
     hourly_station_status_changes,
     plot_hourly_shortage_recoveries,
+    plot_shortage_duration_distribution,
     plot_station_status_by_hour_of_day,
+    shortage_durations,
     station_shortage_hours,
 )
 
@@ -256,6 +259,58 @@ class HourlyStationStatusTests(unittest.TestCase):
         self.addCleanup(plt.close, plt.gcf())
         (line,) = ax.get_lines()
         np.testing.assert_array_equal(line.get_ydata(), small["recoveries_per_station"])
+
+    def test_shortage_durations_require_a_recorded_start_and_recovery(self):
+        with duckdb.connect() as con:
+            con.sql("""
+                SELECT id, 'Station ' || id AS name, 0 AS bike_racks
+                FROM range(1, 3) AS station(id)
+            """).write_parquet(str(self.city_dir / "stations.parquet"))
+            con.sql("""
+                SELECT station_id, time, bikes_available_to_rent, maintenance,
+                       bikes_available_to_rent AS bikes, 0 AS free_racks
+                FROM (VALUES
+                    (1,  3600, 2, FALSE), (1,     0, 1, FALSE),
+                    (1,  1800, 3, FALSE), (1,  5400, 0, FALSE),
+                    (1,  7200, 4, FALSE), (1,  9000, 1, FALSE),
+                    (1, 10800, 0, TRUE),  (1, 12600, 2, FALSE),
+                    (1, 14400, 3, FALSE), (1, 16200, 1, FALSE),
+                    (1, 18000, NULL, FALSE), (1, 19800, 5, FALSE),
+                    (1, 21600, 2, FALSE), (1, 27000, 3, FALSE),
+                    (1, 28800, 1, FALSE),
+                    (2,     0, 18, FALSE), (2, 1800, 2, FALSE),
+                    (2,  2700, 18, FALSE)
+                ) AS status(station_id, time, bikes_available_to_rent, maintenance)
+            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+
+        episodes = shortage_durations(self.city_dir)
+        self.assertEqual(episodes["station_id"].tolist(), [1, 1, 2])
+        self.assertEqual(episodes["duration_hours"].tolist(), [1.0, 1.5, 0.25])
+        self.assertEqual(
+            episodes["shortage_start_utc"].iloc[0], Timestamp("1970-01-01 01:00")
+        )
+        self.assertEqual(
+            episodes["recovery_utc"].iloc[0], Timestamp("1970-01-01 02:00")
+        )
+
+        small = shortage_durations(self.city_dir, station_group="small")
+        self.assertEqual(small["duration_hours"].tolist(), [1.0, 1.5])
+        big = shortage_durations(self.city_dir, station_group="big")
+        self.assertEqual(big["duration_hours"].tolist(), [0.25])
+
+        outside_gaps = shortage_durations(
+            self.city_dir, collection_gaps=[(4000, 5000), (19800, 21000)]
+        )
+        self.assertEqual(outside_gaps["duration_hours"].tolist(), [0.25])
+
+        ax = plot_shortage_duration_distribution(self.city_dir)
+        self.addCleanup(plt.close, plt.gcf())
+        (bars,) = ax.containers
+        assert isinstance(bars, BarContainer)
+        np.testing.assert_allclose(
+            [bar.get_height() for bar in bars.patches],
+            [0, 1 / 3, 0, 2 / 3, 0, 0, 0, 0],
+        )
 
     def test_station_shortage_hours_use_elapsed_time_between_updates(self):
         with duckdb.connect() as con:

@@ -1,12 +1,16 @@
 """Analyze the timing of recorded station status updates."""
 
+from collections.abc import Sequence
+from math import isfinite
 from pathlib import Path
 from typing import Literal
 
 import duckdb
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.dates import AutoDateLocator, ConciseDateFormatter, date2num
+from matplotlib.ticker import PercentFormatter
 from pandas import DataFrame
 
 from src.inspection.station_status import station_rack_summary
@@ -29,6 +33,22 @@ _STATION_STATUS_HISTORY = """
             PARTITION BY station_id ORDER BY time
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         )
+    )
+"""
+
+
+_STATION_RISK_STATES = """
+    selected_stations AS (
+        SELECT DISTINCT id
+        FROM read_parquet(?)
+        WHERE id IS NOT NULL
+          AND COALESCE(list_contains(?::BIGINT[], id), TRUE)
+    ), risk_states AS (
+        SELECT station_id, time,
+               CASE WHEN NOT in_maintenance AND bikes_available_to_rent >= 0
+                    THEN bikes_available_to_rent <= 2 END AS at_risk
+        FROM station_history
+        JOIN selected_stations ON station_id = id
     )
 """
 
@@ -312,19 +332,8 @@ def hourly_shortage_recoveries(
 
         return con.execute(
             f"""
-            WITH {_STATION_STATUS_HISTORY},
-            selected_stations AS (
-                SELECT DISTINCT id
-                FROM read_parquet(?)
-                WHERE id IS NOT NULL
-                  AND COALESCE(list_contains(?::BIGINT[], id), TRUE)
-            ), risk_states AS (
-                SELECT station_id, time,
-                       CASE WHEN NOT in_maintenance AND bikes_available_to_rent >= 0
-                            THEN bikes_available_to_rent <= 2 END AS at_risk
-                FROM station_history
-                JOIN selected_stations ON station_id = id
-            ), transitions AS (
+            WITH {_STATION_STATUS_HISTORY}, {_STATION_RISK_STATES},
+            transitions AS (
                 SELECT time, at_risk,
                        LAG(at_risk) OVER (PARTITION BY station_id ORDER BY time)
                            AS previous_at_risk
@@ -375,6 +384,124 @@ def plot_hourly_shortage_recoveries(
         ylim=(0, None),
     )
     ax.grid(axis="y", alpha=0.25)
+    return ax
+
+
+def shortage_durations(
+    city_dir: str | Path,
+    station_group: Literal["all", "small", "big"] = "all",
+    *,
+    collection_gaps: Sequence[tuple[float, float]] = (),
+) -> DataFrame:
+    """Return one row per complete recorded shortage episode for each station.
+
+    Use the first update with at most two rentable bikes after a healthy update
+    as the start, and the next update with at least three as the recovery.
+    Maintenance and invalid counts break the history and leave the affected
+    episode without a known start or end.
+
+    Collection gaps are (last observed time, first resumed time) in Unix
+    seconds. Exclude an episode if the interval from its last healthy update
+    before onset to its recovery overlaps one of these gaps.
+    """
+    if station_group not in ("all", "small", "big"):
+        raise ValueError("station_group must be 'all', 'small', or 'big'")
+
+    for start, end in collection_gaps:
+        if not isfinite(start) or not isfinite(end) or start >= end:
+            raise ValueError("Collection gaps must have finite, increasing timestamps")
+
+    city_dir = Path(city_dir)
+    selected_ids = _station_ids_for_group(city_dir, station_group)
+    with duckdb.connect() as con:
+        return con.execute(
+            f"""
+            WITH {_STATION_STATUS_HISTORY}, {_STATION_RISK_STATES},
+            gaps AS (
+                SELECT UNNEST(?::DOUBLE[]) AS gap_start,
+                       UNNEST(?::DOUBLE[]) AS gap_end
+            ), state_changes AS (
+                SELECT station_id, time, at_risk,
+                       LAG(at_risk) OVER chronological AS previous_at_risk,
+                       LAG(time) OVER chronological AS previous_time
+                FROM risk_states
+                WINDOW chronological AS (PARTITION BY station_id ORDER BY time)
+                QUALIFY at_risk IS DISTINCT FROM previous_at_risk
+            ), episode_bounds AS (
+                SELECT *,
+                       LEAD(time) OVER chronological AS recovery_time,
+                       LEAD(at_risk) OVER chronological AS next_at_risk
+                FROM state_changes
+                WINDOW chronological AS (PARTITION BY station_id ORDER BY time)
+            )
+            SELECT station_id,
+                   timezone('UTC', to_timestamp(time)) AS shortage_start_utc,
+                   timezone('UTC', to_timestamp(recovery_time)) AS recovery_utc,
+                   (recovery_time - time) / 3600 AS duration_hours
+            FROM episode_bounds
+            WHERE at_risk AND NOT previous_at_risk AND NOT next_at_risk
+              AND recovery_time > time
+              AND NOT EXISTS (
+                  SELECT 1 FROM gaps
+                  WHERE gap_start < recovery_time AND gap_end > previous_time
+              )
+            ORDER BY station_id, time
+            """,
+            [
+                str(city_dir / "station_status.parquet"),
+                str(city_dir / "stations.parquet"),
+                selected_ids,
+                [start for start, _ in collection_gaps],
+                [end for _, end in collection_gaps],
+            ],
+        ).df()
+
+
+def plot_shortage_duration_distribution(
+    city_dir: str | Path,
+    station_group: Literal["all", "small", "big"] = "all",
+    *,
+    collection_gaps: Sequence[tuple[float, float]] = (),
+) -> Axes:
+    """Plot the share of complete shortage episodes in each duration bin."""
+    city_dir = Path(city_dir)
+    episodes = shortage_durations(
+        city_dir, station_group=station_group, collection_gaps=collection_gaps
+    )
+    bin_edges = [0, 0.25, 0.5, 1, 2, 4, 8, 24, np.inf]
+    bin_labels = [
+        "<15 min",
+        "15-30 min",
+        "30-60 min",
+        "1-2 h",
+        "2-4 h",
+        "4-8 h",
+        "8-24 h",
+        "24+ h",
+    ]
+    counts, _ = np.histogram(episodes["duration_hours"].to_numpy(), bins=bin_edges)
+
+    _, ax = plt.subplots(figsize=(10, 4), layout="constrained")
+    if episodes.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No complete shortage episodes",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+    else:
+        ax.bar(bin_labels, counts / len(episodes))
+    ax.set(
+        title=f"{city_dir.name.title()} shortage durations ({station_group} stations)",
+        xlabel="Shortage duration",
+        ylabel="Share of shortage episodes",
+        ylim=(0, None),
+    )
+    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1))
+    ax.grid(axis="y", alpha=0.25)
+    ax.set_axisbelow(True)
     return ax
 
 
