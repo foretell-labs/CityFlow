@@ -13,7 +13,7 @@ from matplotlib.dates import AutoDateLocator, ConciseDateFormatter, date2num
 from matplotlib.ticker import PercentFormatter
 from pandas import DataFrame
 
-from src.inspection.station_status import station_rack_summary
+from city_flow.inspection.station_status import station_rack_summary
 
 _STATION_STATUS_HISTORY = """
     status_updates AS (

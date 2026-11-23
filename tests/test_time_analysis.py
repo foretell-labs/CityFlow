@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.container import BarContainer
 from pandas import Timestamp
 
-from src.inspection.time_analysis import (
+from city_flow.inspection.time_analysis import (
     hourly_shortage_recoveries,
     hourly_station_status_changes,
     plot_hourly_shortage_recoveries,

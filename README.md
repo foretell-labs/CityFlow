@@ -26,7 +26,7 @@ Once installed, install all dependencies via:
 ```bash
 uv sync
 ```
-which creates `.venv/` with the right Python and the exact versions from `uv.lock`
+This creates `.venv/` with the Python version and dependencies from `uv.lock` and installs `city-flow` in editable mode. Select the `.venv` Python interpreter as your notebook kernel. In Python, import the package as `city_flow`.
 
 Then, install the git hooks (for pre-commit) using:
 ```bash
@@ -60,7 +60,7 @@ uv run python <path-to-pyfile>
 
 >[!TIP]
 > ```bash
-> uv run python src/build_hourly.py --city heidelberg
+> uv run python -m city_flow.data_extraction.extract_cities
 > ```
 
 After each `git pull` that changes `uv.lock`, run:

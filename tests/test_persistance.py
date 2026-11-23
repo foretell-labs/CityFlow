@@ -7,7 +7,7 @@ import duckdb
 from matplotlib import pyplot as plt
 from pandas import DataFrame, isna
 
-from src.modelling.persistance import (
+from city_flow.modelling.persistance import (
     build_persistence_evaluation,
     evaluation_metrics,
     predict_persistence,

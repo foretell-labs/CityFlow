@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.dates import date2num
 
-from src.inspection.trips import (
+from city_flow.inspection.trips import (
     days_with_missing_station_ids,
     plot_daily_missing_station_id_share,
 )

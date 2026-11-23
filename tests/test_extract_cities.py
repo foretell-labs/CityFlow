@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import duckdb
 
-from src.data_extraction import extract_cities
+from city_flow.data_extraction import extract_cities
 
 
 class ExtractCitiesTests(unittest.TestCase):

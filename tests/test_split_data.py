@@ -4,7 +4,7 @@ from pathlib import Path
 
 import duckdb
 
-from src.data_extraction.split_data import split_station_status_by_time
+from city_flow.data_extraction.split_data import split_station_status_by_time
 
 
 class StationStatusSplitTests(unittest.TestCase):
