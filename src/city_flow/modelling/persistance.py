@@ -113,7 +113,7 @@ def evaluation_metrics(
         raise ValueError("Both risk columns must contain only 0, 1, or missing values")
 
     if scored.empty:
-        counts = np.zeros((2, 2), dtype=int)
+        raise ValueError("Scored pairs are empty; cannot compute confusion matrix")
     else:
         counts = confusion_matrix(
             scored["actual_at_risk"].to_numpy(dtype=int),
