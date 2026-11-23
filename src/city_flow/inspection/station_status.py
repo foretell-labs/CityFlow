@@ -5,6 +5,8 @@ from pathlib import Path
 import duckdb
 from pandas import DataFrame
 
+SMALL_STATION_MAX_AVG_BIKES = 6
+
 
 def station_status_mismatch_ratio(city_dir: str | Path) -> float | None:
     """Return the fraction of updates with a nonzero bike count difference.
@@ -65,8 +67,9 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
                        WHEN s.bike_racks > 0 THEN STDDEV_POP(t.bikes_available_to_rent)
                    END AS std_available_bikes,
                    CASE
-                       WHEN mean_available_bikes <= 6 THEN 'small'
-                       WHEN mean_available_bikes > 6 THEN 'big'
+                       WHEN mean_available_bikes IS NULL THEN NULL
+                        WHEN mean_available_bikes <= ? THEN 'small'
+                        ELSE 'big'
                    END AS dimension
             FROM stations AS s
             LEFT JOIN read_parquet(?) AS t ON t.station_id = s.station_id
@@ -75,6 +78,7 @@ def station_rack_summary(city_dir: str | Path) -> DataFrame:
             """,
             [
                 str(city_dir / "stations.parquet"),
+                SMALL_STATION_MAX_AVG_BIKES,
                 str(city_dir / "station_status.parquet"),
             ],
         ).df()

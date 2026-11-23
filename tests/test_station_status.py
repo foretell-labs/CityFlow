@@ -7,6 +7,7 @@ import duckdb
 from pandas import isna
 
 from city_flow.inspection.station_status import (
+    SMALL_STATION_MAX_AVG_BIKES,
     station_rack_summary,
     station_status_mismatch_ratio,
 )
@@ -53,19 +54,33 @@ class StationStatusMismatchTests(unittest.TestCase):
         self.assertIsNone(station_status_mismatch_ratio(self.city_dir))
 
     def test_rack_summary_uses_capacity_specific_metrics(self):
+        cutoff = SMALL_STATION_MAX_AVG_BIKES
+        spread = min(1, cutoff)
+        south_low, south_high = cutoff - spread, cutoff + spread
+        west_count = cutoff + 1
         with duckdb.connect() as con:
             con.sql("""
                 SELECT * FROM (VALUES (1, 'North', 10), (1, 'North', 10),
                     (2, 'South', 0), (3, 'East', 8), (4, 'West', 0))
                 AS stations(id, name, bike_racks)
             """).write_parquet(str(self.city_dir / "stations.parquet"))
-            con.sql("""
+            con.sql(
+                """
                 SELECT * FROM (VALUES
                     (1, 3, 7, 3), (1, 2, 5, 1), (1, 6, 5, 5), (1, NULL, 6, NULL),
-                    (2, 12, 4, 8), (2, 10, 9, 10), (2, 11, NULL, NULL),
-                    (4, 12, 3, 10))
+                    (2, ?, 4, ?), (2, ?, 9, ?), (2, 11, NULL, NULL),
+                    (4, ?, 3, ?))
                 AS status(station_id, bikes, free_racks, bikes_available_to_rent)
-            """).write_parquet(str(self.city_dir / "station_status.parquet"))
+                """,
+                params=[
+                    south_low,
+                    south_low,
+                    south_high,
+                    south_high,
+                    west_count,
+                    west_count,
+                ],
+            ).write_parquet(str(self.city_dir / "station_status.parquet"))
 
         summary = station_rack_summary(self.city_dir)
 
@@ -84,9 +99,8 @@ class StationStatusMismatchTests(unittest.TestCase):
         north, south, east, west = summary.itertuples(index=False, name=None)
         self.assertEqual(north[:5], (1, "North", 10, 0.5, 3.0))
         self.assertAlmostEqual(north[5], sqrt(8 / 3))
-        self.assertEqual(north[6], "small")
-        self.assertEqual(south, (2, "South", 0, 0.0, 6.0, 1.0, "small"))
+        self.assertEqual(south, (2, "South", 0, 0.0, cutoff, spread, "small"))
         self.assertEqual(east[:3], (3, "East", 8))
         self.assertTrue(all(isnan(value) for value in east[3:6]))
         self.assertTrue(isna(east[6]))
-        self.assertEqual(west, (4, "West", 0, 0.0, 10.0, 0.0, "big"))
+        self.assertEqual(west, (4, "West", 0, 0.0, west_count, 0.0, "big"))
