@@ -112,11 +112,14 @@ def evaluation_metrics(
     if not scored.isin([0, 1]).to_numpy().all():
         raise ValueError("Both risk columns must contain only 0, 1, or missing values")
 
-    counts = confusion_matrix(
-        scored["actual_at_risk"].to_numpy(dtype=int),
-        scored["predicted_at_risk"].to_numpy(dtype=int),
-        labels=[0, 1],
-    )
+    if scored.empty:
+        counts = np.zeros((2, 2), dtype=int)
+    else:
+        counts = confusion_matrix(
+            scored["actual_at_risk"].to_numpy(dtype=int),
+            scored["predicted_at_risk"].to_numpy(dtype=int),
+            labels=[0, 1],
+        )
     tn, fp, fn, tp = map(int, counts.ravel())
     undefined = float("nan")
     metrics = {
