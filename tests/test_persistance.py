@@ -124,13 +124,8 @@ class PersistenceTests(unittest.TestCase):
             self.assertTrue(isnan(metrics[name]))
         self.assertEqual([label.get_text() for label in ax.texts[-2:]], ["0\nn/a"] * 2)
 
-    def test_evaluation_metrics_handles_no_complete_pairs(self):
+    def test_evaluation_metrics_raises_when_no_complete_pairs(self):
         pairs = DataFrame({"actual_at_risk": [None], "predicted_at_risk": [1]})
 
-        ax, metrics = evaluation_metrics(pairs)
-        self.addCleanup(plt.close, plt.gcf())
-
-        for name in ("tn", "fp", "fn", "tp"):
-            self.assertEqual(metrics[name], 0)
-        self.assertTrue(isnan(metrics["accuracy"]))
-        self.assertEqual([label.get_text() for label in ax.texts], ["0\nn/a"] * 4)
+        with self.assertRaisesRegex(ValueError, "Scored pairs are empty"):
+            evaluation_metrics(pairs)
