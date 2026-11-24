@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.ipynb linguist-detectable=false
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb
 uv.lock linguist-generated=true

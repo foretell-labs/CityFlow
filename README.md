@@ -39,6 +39,15 @@ Furthermore, to have git blame skip the formatting-only commit run:
 git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
+Then to remove the outputs of notebooks from commits, one must run:
+```bash
+uv run nbstripout --install --attributes .gitattributes
+```
+if then one needs to normalize their notebooks: (probably not necessary)
+```bash
+git add --renormalize notebooks/
+```
+
 ### After setup
 
 Check that setup worked by running:
