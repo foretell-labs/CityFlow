@@ -1,7 +1,9 @@
 """Predict a station's shortage risk by carrying forward its latest status."""
 
-from math import isfinite
+from math import isfinite, sqrt
 from pathlib import Path
+from statistics import NormalDist
+from typing import TypedDict
 
 import duckdb
 import numpy as np
@@ -99,15 +101,47 @@ def build_persistence_evaluation(
         ).df()
 
 
+class PersistenceMetrics(TypedDict):
+    tn: int
+    fp: int
+    fn: int
+    tp: int
+    precision: float
+    recall: float
+    f1: float
+    accuracy: float
+    new_shortage_rate: float
+    confidence_intervals: dict[str, tuple[float, float]]
+
+
+def _wilson_interval(successes: int, total: int, z: float) -> tuple[float, float]:
+    """Return a Wilson score interval for a binomial proportion."""
+    if total == 0:
+        return float("nan"), float("nan")
+
+    proportion = successes / total
+    z_squared = z * z
+    scale = 1 + z_squared / total
+    center = (proportion + z_squared / (2 * total)) / scale
+    margin = z * sqrt((proportion * (1 - proportion) + z_squared / (4 * total)) / total)
+    margin /= scale
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
 def evaluation_metrics(
-    persistence_pairs: DataFrame,
-) -> tuple[Axes, dict[str, int | float]]:
+    persistence_pairs: DataFrame, *, confidence: float = 0.95
+) -> tuple[Axes, PersistenceMetrics]:
     """Return a confusion matrix plot, cell counts, and five benchmark metrics.
 
     Use 1 for shortage and 0 for healthy. Skip pairs with either label missing.
-    Metrics with a zero denominator are NaN. Apply any evaluation eligibility
-    filters to the input before calling this function.
+    Include Wilson confidence intervals assuming independent station-hours.
+    For F1, transform the Wilson interval for TP / (TP + FP + FN).
+    Undefined metrics and their interval endpoints are NaN. Apply any
+    eligibility filters to the input before calling this function.
     """
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1")
+
     scored = persistence_pairs[["actual_at_risk", "predicted_at_risk"]].dropna()
     if not scored.isin([0, 1]).to_numpy().all():
         raise ValueError("Both risk columns must contain only 0, 1, or missing values")
@@ -122,7 +156,9 @@ def evaluation_metrics(
         )
     tn, fp, fn, tp = map(int, counts.ravel())
     undefined = float("nan")
-    metrics = {
+    z = -NormalDist().inv_cdf((1 - confidence) / 2)
+    overlap_lower, overlap_upper = _wilson_interval(tp, tp + fp + fn, z)
+    metrics: PersistenceMetrics = {
         "tn": tn,
         "fp": fp,
         "fn": fn,
@@ -132,6 +168,16 @@ def evaluation_metrics(
         "f1": 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else undefined,
         "accuracy": (tp + tn) / len(scored) if len(scored) else undefined,
         "new_shortage_rate": fn / (tn + fn) if tn + fn else undefined,
+        "confidence_intervals": {
+            "precision": _wilson_interval(tp, tp + fp, z),
+            "recall": _wilson_interval(tp, tp + fn, z),
+            "f1": (
+                2 * overlap_lower / (1 + overlap_lower),
+                2 * overlap_upper / (1 + overlap_upper),
+            ),
+            "accuracy": _wilson_interval(tp + tn, len(scored), z),
+            "new_shortage_rate": _wilson_interval(fn, tn + fn, z),
+        },
     }
 
     row_totals = counts.sum(axis=1, keepdims=True)
