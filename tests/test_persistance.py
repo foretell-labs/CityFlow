@@ -93,8 +93,10 @@ class PersistenceTests(unittest.TestCase):
         ax, metrics = evaluation_metrics(pairs)
         self.addCleanup(plt.close, plt.gcf())
 
+        point_estimates = dict(metrics)
+        del point_estimates["confidence_intervals"]
         self.assertEqual(
-            metrics,
+            point_estimates,
             {
                 "tn": 3,
                 "fp": 2,
@@ -107,6 +109,18 @@ class PersistenceTests(unittest.TestCase):
                 "new_shortage_rate": 1 / 4,
             },
         )
+        expected_intervals = {
+            "precision": (0.2999933151, 0.9032285889),
+            "recall": (0.3755346298, 0.9637758914),
+            "f1": (0.4005864915, 0.9140940597),
+            "accuracy": (0.3967781475, 0.8922087326),
+            "new_shortage_rate": (0.0455872608, 0.6993581574),
+        }
+        for metric, (expected_lower, expected_upper) in expected_intervals.items():
+            lower, upper = metrics["confidence_intervals"][metric]
+            self.assertAlmostEqual(lower, expected_lower)
+            self.assertAlmostEqual(upper, expected_upper)
+
         self.assertEqual(
             [label.get_text() for label in ax.texts],
             ["3\n60.0%", "2\n40.0%", "1\n20.0%", "4\n80.0%"],
@@ -120,8 +134,16 @@ class PersistenceTests(unittest.TestCase):
 
         self.assertEqual(metrics["accuracy"], 1)
         self.assertEqual(metrics["new_shortage_rate"], 0)
+        self.assertTrue(isnan(metrics["precision"]))
+        self.assertTrue(isnan(metrics["recall"]))
+        self.assertTrue(isnan(metrics["f1"]))
+        intervals = metrics["confidence_intervals"]
         for name in ("precision", "recall", "f1"):
-            self.assertTrue(isnan(metrics[name]))
+            self.assertTrue(all(isnan(bound) for bound in intervals[name]))
+
+        lower, upper = intervals["accuracy"]
+        self.assertLess(lower, 1)
+        self.assertAlmostEqual(upper, 1)
         self.assertEqual([label.get_text() for label in ax.texts[-2:]], ["0\nn/a"] * 2)
 
     def test_evaluation_metrics_raises_when_no_complete_pairs(self):
