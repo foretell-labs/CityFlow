@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from math import isfinite, nan
 
 import numpy as np
-from pandas import DataFrame, to_numeric
+from pandas import DataFrame
 
 
 def error_rate_by_time(prediction_pairs: DataFrame) -> DataFrame:
@@ -17,7 +17,8 @@ def error_rate_by_time(prediction_pairs: DataFrame) -> DataFrame:
     scored = prediction_pairs[
         ["issue_time", "predicted_at_risk", "actual_at_risk"]
     ].dropna()
-    issue_time = to_numeric(scored["issue_time"])
+    # issue_time = to_numeric(scored["issue_time"])
+    issue_time = scored["issue_time"]
     if not np.isfinite(issue_time.to_numpy(dtype=float)).all():
         raise ValueError("issue_time must contain finite Unix timestamps")
 
