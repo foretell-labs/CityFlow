@@ -20,63 +20,20 @@ Download and extract the dataset into `data/raw/`.
 The dataset is licensed under CC BY-NC 4.0.
 
 ## Getting started
-After cloning the repo, install `uv` if not already installed (please refer to the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)).
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+2. Create the environment (Python version and packages from `uv.lock`):
+   ```bash
+   uv sync
+   ```
+3. Download the dataset into `data/raw/` (see [Dataset](#dataset)).
+4. Run a pipeline step, or open the notebooks with the `.venv` kernel:
+   ```bash
+   uv run python -m city_flow.data_extraction.extract_cities
+   ```
 
-Once installed, install all dependencies via:
-```bash
-uv sync
-```
-This creates `.venv/` with the Python version and dependencies from `uv.lock` and installs `city-flow` in editable mode. Select the `.venv` Python interpreter as your notebook kernel. In Python, import the package as `city_flow`.
-
-Then, install the git hooks (for pre-commit) using:
-```bash
-uv run pre-commit install
-```
-which turns on the git hooks, which run formatting and lint checks on every commit.
-
-Furthermore, to have git blame skip the formatting-only commit run:
-```bash
-git config blame.ignoreRevsFile .git-blame-ignore-revs
-```
-
-Then to remove the outputs of notebooks from commits, one must run:
-```bash
-uv run nbstripout --install --attributes .gitattributes
-```
-if then one needs to normalize their notebooks: (probably not necessary)
-```bash
-git add --renormalize notebooks/
-```
-
-### After setup
-
-Check that setup worked by running:
-```bash
-uv run pre-commit run --all-files
-```
-Every hook should pass.
-
-Add packages via:
-```bash
-uv add <package>
-```
-**DO NOT USE PIP**: packages installed that way aren't recorded in `uv.lock`, and the next `uv sync` removes them.
-
-Run code via:
-```bash
-uv run python <path-to-pyfile>
-```
-
->[!TIP]
-> ```bash
-> uv run python -m city_flow.data_extraction.extract_cities
-> ```
-
-After each `git pull` that changes `uv.lock`, run:
-```bash
-uv sync
-```
-
+**Want to contribute?** Read [CONTRIBUTING.md](CONTRIBUTING.md) first. It
+describes the full workflow and it includes the one-time setup for git hooks
+and notebook stripping, which `uv sync` doesn't do.
 
 ## Current Progress
 
