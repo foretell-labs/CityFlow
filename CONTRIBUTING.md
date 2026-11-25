@@ -24,7 +24,6 @@ Every contributor must run all of these once.
    each clone must configure it, otherwise git silently commits outputs:
    ```bash
    uv run nbstripout --install
-   git config filter.nbstripout.extrakeys "metadata.kernelspec metadata.language_info.version"
    ```
 5. **Make `git blame` skip formatting-only commits:**
    ```bash
