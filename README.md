@@ -1,4 +1,10 @@
 # 🚲 CityFlow
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![CI](https://github.com/foretell-labs/CityFlow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/foretell-labs/CityFlow/actions/workflows/ci.yml)
+
 
 **Predicting bike-sharing station shortages using machine learning.**
 
@@ -48,4 +54,5 @@ and notebook stripping, which `uv sync` doesn't do.
 
 ## License
 Code: [**MIT**](LICENSE).
+
 Dataset: **CC BY-NC 4.0** (see the original dataset).
