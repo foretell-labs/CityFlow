@@ -21,7 +21,8 @@ jobs:
     #   matrix:
     #     python-version: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7          # copy the repo onto the machine
+      # copy the repo onto the machine
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       # install uv # v10.4.0
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
