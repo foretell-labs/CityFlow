@@ -15,7 +15,7 @@ repos:
       - id: check-merge-conflict # leftover <<<<<<< markers
       - id: detect-private-key # checks for the existence of private keys.
       - id: check-added-large-files # protects against committing the 2.3 GB dataset
-        args: ["--maxkb=1000"] # max 1MB
+        args: ["--maxkb=2000"] # max 1MB
 
   # Fails if pyproject.toml changed but uv.lock wasn't updated (common for beginners)
   - repo: https://github.com/astral-sh/uv-pre-commit

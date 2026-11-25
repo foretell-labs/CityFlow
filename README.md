@@ -41,6 +41,11 @@ The dataset is licensed under CC BY-NC 4.0.
 describes the full workflow and it includes the one-time setup for git hooks
 and notebook stripping, which `uv sync` doesn't do.
 
+## Temporary Dashboard
+The screenshot below showcases our prototype dashboard, designed to provide a clear and intuitive visualization of predicted docking station availability two hours ahead. Stations are color-coded according to their predicted status: **green** indicates safe stations, **red** highlights stations at risk of bike shortages, and **gray** represents temporarily unavailable stations.
+
+![CityFlow dashboard showing two-hour bike availability forecasts in Bergamo](images/Dashboard_Bergamo_temp.png)
+
 ## Current Progress
 
 - [x] Dataset extraction and city filtering
